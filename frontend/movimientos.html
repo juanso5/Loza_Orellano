@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movimientos</title>
+    <link rel="stylesheet" href="styles/movimientos.css">
+    <script src="components/movimientos.js" defer></script>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>Menú</h2>
+        <ul>
+            <li><a href="home.html">Inicio</a></li>
+            <li><a href="clientes.html">Clientes</a></li>
+            <li><a href="movimientos.html">Movimientos</a></li>
+            <li><a href="rendimientos.html">Rendimientos</a></li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Buscar por cliente o especie...">
+                <button id="search-btn">Buscar</button>
+            </div>
+
+            <!-- Add Movement Button -->
+            <div class="add-movement">
+                <button id="open-modal-btn">Agregar Movimiento</button>
+            </div>
+
+            <!-- Movements List -->
+            <div class="movements-section">
+                <h2>Listado de Movimientos</h2>
+                <div id="movements-list">
+                    <!-- Movements will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Adding Movement -->
+    <div class="modal" id="movement-modal">
+        <div class="modal-content">
+            <h2>Agregar Movimiento</h2>
+            <input type="text" id="movement-client" placeholder="Cliente">
+            <select id="movement-type">
+                <option value="">Tipo de movimiento</option>
+                <option value="Ingreso">Ingreso</option>
+                <option value="Egreso">Egreso</option>
+            </select>
+            <input type="text" id="movement-specie" placeholder="Especie comprada">
+            <input type="number" id="movement-nominal" placeholder="Nominal comprado">
+            <button id="add-movement-btn">Agregar</button>
+            <button class="close-btn" id="close-modal-btn">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Modal for Editing Movement -->
+    <div class="modal" id="edit-movement-modal">
+        <div class="modal-content">
+            <h2>Editar Movimiento</h2>
+            <input type="text" id="edit-movement-client" placeholder="Cliente">
+            <select id="edit-movement-type">
+                <option value="">Tipo de movimiento</option>
+                <option value="Ingreso">Ingreso</option>
+                <option value="Egreso">Egreso</option>
+            </select>
+            <input type="text" id="edit-movement-specie" placeholder="Especie comprada">
+            <input type="number" id="edit-movement-nominal" placeholder="Nominal comprado">
+            <button id="save-edit-movement-btn">Guardar Cambios</button>
+            <button class="close-btn" id="close-edit-modal-btn">Cerrar</button>
+        </div>
+    </div>
+</body>
+</html>

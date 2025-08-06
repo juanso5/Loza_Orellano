@@ -12,13 +12,21 @@
 </head>
 <body>
     <!-- Sidebar -->
-    <div class="sidebar">
-        <h2>Menú</h2>
+    <div class="sidebar" id="sidebar">
+        <button id="sidebar-toggle" class="sidebar-toggle">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h2><a href="home.html"><img src="assets/logo.png" class="logo" alt="Logo Inicio"/></a></h2>
         <ul>
-            <li><a href="inicio.html">Inicio</a></li>
-            <li><a href="clientes.html">Clientes</a></li>
-            <li><a href="reporte.html">Reporte</a></li>
-            <li><a href="rendimientos.html">Rendimientos</a></li>
+            <li>
+                <a href="home.html">
+                    <i class="fas fa-home"></i>
+                    <span class="menu-text">Inicio</span>
+                </a>
+            </li>
+            <li><a href="clientes.html"><i class="fas fa-users"></i> <span class="menu-text">Clientes</span></a></li>
+            <li><a href="movimientos.html"><i class="fas fa-exchange-alt"></i> <span class="menu-text">Movimientos</span></a></li>
+            <li><a href="rendimientos.html"><i class="fas fa-chart-line"></i> <span class="menu-text">Rendimientos</span></a></li>
         </ul>
     </div>
 
