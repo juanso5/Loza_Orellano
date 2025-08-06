@@ -11,37 +11,51 @@
     <script src="components/home.js" defer></script>
 </head>
 <body>
-    <div class="container">
-        <!-- Tasks Section -->
-        <div class="tasks-section">
-            <!-- Tareas Pendientes -->
-            <div class="tasks-container">
-                <h2>Tareas Pendientes</h2>
-                <div id="tasks-list">
-                    <!-- Tasks will be dynamically added here -->
-                </div>
-            </div>
-
-            <!-- Button to Open Modal -->
-            <button class="add-task-btn" id="open-modal-btn">Agregar Tarea</button>
-        </div>
-
-        <!-- Interactive Calendar -->
-        <div class="calendar-container">
-            <h2>Calendario</h2>
-            <div id="calendar"></div>
-        </div>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>Menú</h2>
+        <ul>
+            <li><a href="inicio.html">Inicio</a></li>
+            <li><a href="clientes.html">Clientes</a></li>
+            <li><a href="reporte.html">Reporte</a></li>
+            <li><a href="rendimientos.html">Rendimientos</a></li>
+        </ul>
     </div>
 
-    <!-- Modal for Adding Tasks -->
-    <div class="modal" id="task-modal">
-        <div class="modal-content">
-            <h2>Agregar Tarea</h2>
-            <input type="text" id="task-title" placeholder="Título de la tarea">
-            <textarea id="task-description" placeholder="Descripción de la tarea"></textarea>
-            <input type="date" id="task-date">
-            <button id="add-task-btn">Agregar Tarea</button>
-            <button class="close-btn" id="close-modal-btn">Cerrar</button>
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <!-- Tasks Section -->
+            <div class="tasks-section">
+                <!-- Tareas Pendientes -->
+                <div class="tasks-container">
+                    <h2>Tareas Pendientes</h2>
+                    <div id="tasks-list">
+                        <!-- Tasks will be dynamically added here -->
+                    </div>
+                </div>
+
+                <!-- Button to Open Modal -->
+                <button class="add-task-btn" id="open-modal-btn">Agregar Tarea</button>
+            </div>
+
+            <!-- Interactive Calendar -->
+            <div class="calendar-container">
+                <h2>Calendario</h2>
+                <div id="calendar"></div>
+            </div>
+        </div>
+
+        <!-- Modal for Adding Tasks -->
+        <div class="modal" id="task-modal">
+            <div class="modal-content">
+                <h2>Agregar Tarea</h2>
+                <input type="text" id="task-title" placeholder="Título de la tarea">
+                <textarea id="task-description" placeholder="Descripción de la tarea"></textarea>
+                <input type="date" id="task-date">
+                <button id="add-task-btn">Agregar Tarea</button>
+                <button class="close-btn" id="close-modal-btn">Cerrar</button>
+            </div>
         </div>
     </div>
 </body>

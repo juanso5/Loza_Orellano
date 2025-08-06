@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes</title>
+    <link rel="stylesheet" href="styles/clientes.css">
+    <script src="components/clientes.js" defer></script>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>Menú</h2>
+        <ul>
+            <li><a href="index.html">Inicio</a></li>
+            <li><a href="clientes.html">Clientes</a></li>
+            <li><a href="reporte.html">Reporte</a></li>
+            <li><a href="rendimientos.html">Rendimientos</a></li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Buscar cliente por nombre...">
+                <button id="search-btn">Buscar</button>
+            </div>
+
+            <!-- Add Client Button -->
+            <div class="add-client">
+                <button id="open-modal-btn">Agregar Cliente</button>
+            </div>
+
+            <!-- Clients List -->
+            <div class="clients-section">
+                <h2>Listado de Clientes</h2>
+                <div id="clients-list">
+                    <!-- Clients will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Client -->
+    <div class="modal" id="client-modal">
+        <div class="modal-content">
+            <h2 id="modal-title">Agregar Cliente</h2>
+            <input type="text" id="client-name" placeholder="Nombre del cliente">
+            <input type="text" id="client-financial-data" placeholder="Datos financieros">
+            <input type="text" id="client-risk-profile" placeholder="Perfil de riesgo">
+            <textarea id="client-comments" placeholder="Comentarios"></textarea>
+            <button id="save-client-btn">Guardar</button>
+            <button class="close-btn" id="close-modal-btn">Cerrar</button>
+        </div>
+    </div>
+</body>
+</html>
