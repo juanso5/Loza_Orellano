@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - Tareas Pendientes</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css">
+    <link rel="stylesheet" href="styles/home.css">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+    <script src="components/home.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Tasks Section -->
+        <div class="tasks-section">
+            <!-- Tareas Pendientes -->
+            <div class="tasks-container">
+                <h2>Tareas Pendientes</h2>
+                <div id="tasks-list">
+                    <!-- Tasks will be dynamically added here -->
+                </div>
+            </div>
+
+            <!-- Button to Open Modal -->
+            <button class="add-task-btn" id="open-modal-btn">Agregar Tarea</button>
+        </div>
+
+        <!-- Interactive Calendar -->
+        <div class="calendar-container">
+            <h2>Calendario</h2>
+            <div id="calendar"></div>
+        </div>
+    </div>
+
+    <!-- Modal for Adding Tasks -->
+    <div class="modal" id="task-modal">
+        <div class="modal-content">
+            <h2>Agregar Tarea</h2>
+            <input type="text" id="task-title" placeholder="Título de la tarea">
+            <textarea id="task-description" placeholder="Descripción de la tarea"></textarea>
+            <input type="date" id="task-date">
+            <button id="add-task-btn">Agregar Tarea</button>
+            <button class="close-btn" id="close-modal-btn">Cerrar</button>
+        </div>
+    </div>
+</body>
+</html>
