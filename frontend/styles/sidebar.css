@@ -87,7 +87,7 @@ body .sidebar {
 
 /* Sidebar Collapsed */
 .sidebar.collapsed {
-    width: 60px;
+    width: 80px;
     min-width: 60px;
 }
 

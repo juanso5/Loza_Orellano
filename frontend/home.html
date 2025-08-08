@@ -1,56 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home - Tareas Pendientes</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css">
-    <link rel="stylesheet" href="styles/home.css">
-    <link rel="stylesheet" href="styles/sidebar.css">
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-    <script src="components/home.js" defer></script>
-    <script src="components/sidebar.js" defer></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Home - Calendario y Tareas</title>
+
+  <!-- FullCalendar CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tus estilos -->
+  <link rel="stylesheet" href="styles/sidebar.css">
+  <link rel="stylesheet" href="styles/home.css">
 </head>
-<body>
-    <!-- Sidebar -->
-    <div id="sidebar-container"></div>
+    <body>
+  <!-- Sidebar (se carga desde components/sidebar.js) -->
+  <div id="sidebar-container"></div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="container">
-            <!-- Tasks Section -->
-            <div class="tasks-section">
-                <!-- Tareas Pendientes -->
-                <div class="tasks-container">
-                    <h2>Tareas Pendientes</h2>
-                    <div id="tasks-list">
-                        <!-- Tasks will be dynamically added here -->
-                    </div>
-                </div>
+  <!-- Main area -->
+  <div class="main-content" id="main-content">
+    <div class="main-inner">
+      <div class="top-row">
+        <h1>Calendario y Tareas</h1>
+        <div class="top-controls">
+          <button id="open-new-btn" class="btn-add"><i class="fas fa-plus"></i> Nuevo Evento</button>
+        </div>
+      </div>
 
-                <!-- Button to Open Modal -->
-                <button class="add-task-btn" id="open-modal-btn">Agregar Tarea</button>
-            </div>
-
-            <!-- Interactive Calendar -->
-            <div class="calendar-container">
-                <h2>Calendario</h2>
-                <div id="calendar"></div>
-            </div>
+      <!-- === TASKS ROW (AHORA ARRIBA) === -->
+      <div class="tasks-row">
+        <div class="card tasks-card">
+          <div class="card-header"><h3>Tareas de Hoy</h3></div>
+          <div id="today-tasks" class="card-body task-list"></div>
         </div>
 
-        <!-- Modal for Adding Tasks -->
-        <div class="modal" id="task-modal">
-            <div class="modal-content">
-                <h2>Agregar Tarea</h2>
-                <input type="text" id="task-title" placeholder="Título de la tarea">
-                <textarea id="task-description" placeholder="Descripción de la tarea"></textarea>
-                <input type="date" id="task-date">
-                <button id="add-task-btn">Agregar Tarea</button>
-                <button class="close-btn" id="close-modal-btn">Cerrar</button>
-            </div>
+        <div class="card tasks-card">
+          <div class="card-header"><h3>Tareas Pendientes</h3></div>
+          <div id="pending-tasks" class="card-body task-list"></div>
         </div>
+      </div>
+
+      <!-- === CALENDAR (ABAJO) === -->
+      <div class="card calendar-card">
+        <div class="calendar-wrapper">
+          <div id="calendar"></div>
+        </div>
+      </div>
     </div>
+  </div>
+
+  <!-- Modal (agregar / editar) -->
+  <div id="task-modal" class="modal" aria-hidden="true">
+    <div class="modal-dialog">
+      <header class="modal-header">
+        <h2 id="modal-title">Agregar Tarea</h2>
+      </header>
+
+      <div class="modal-body">
+        <label for="task-title">Título</label>
+        <input id="task-title" type="text" placeholder="Título de la tarea">
+
+        <label for="task-desc">Descripción</label>
+        <textarea id="task-desc" placeholder="Descripción de la tarea"></textarea>
+
+        <div class="grid-2">
+          <div>
+            <label for="task-date">Fecha</label>
+            <input id="task-date" type="date">
+          </div>
+          <div>
+            <label for="task-priority">Prioridad</label>
+            <select id="task-priority">
+              <option value="">Seleccionar</option>
+              <option value="alta">Alta</option>
+              <option value="media">Media</option>
+              <option value="baja">Baja</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <footer class="modal-footer">
+        <button id="save-task" class="btn-save"><i class="fas fa-check"></i> Guardar</button>
+        <button id="cancel-task" class="btn-close"><i class="fas fa-times"></i> Cancelar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- CONFIRM DELETE MODAL (nuevo) -->
+  <div id="confirm-modal" class="modal" aria-hidden="true">
+    <div class="modal-dialog">
+      <header class="modal-header">
+        <h2>Confirmar eliminación</h2>
+      </header>
+
+      <div class="modal-body">
+        <p id="confirm-text">¿Deseás eliminar esta tarea? Esta acción no se puede deshacer.</p>
+      </div>
+
+      <footer class="modal-footer">
+        <button id="confirm-delete-btn" class="btn-danger"><i class="fas fa-trash"></i> Eliminar</button>
+        <button id="cancel-delete-btn" class="btn-close"><i class="fas fa-times"></i> Cancelar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- FullCalendar JS -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+  <!-- Sidebar loader and logic -->
+  <script src="components/sidebar.js"></script>
+
+  <!-- Main app -->
+  <script src="components/home.js" defer></script>
 </body>
 </html>

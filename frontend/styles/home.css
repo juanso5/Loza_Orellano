@@ -1,185 +1,283 @@
-/* General Styles */
-body {
-    font-family: 'Roboto', sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #f4f6f9;
-    color: #333;
+/* =========================================================
+   styles/home.css  — Final (integrado con sidebar.css)
+   - Respetar sidebar (220px expanded, 60px collapsed)
+   - Calendar centered inside available area; no big white gaps
+   - Tasks below in two columns (today / pending)
+   - Priority visual treatment and modal styles
+   ========================================================= */
+
+/* ---------- VARIABLES / BASE ---------- */
+:root{
+  --bg: #f4f6f9;
+  --card: #ffffff;
+  --muted: #6f7d88;
+  --accent: #0f6cff;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --shadow: 0 10px 30px rgba(16,24,40,0.06);
+  --radius: 10px;
+  --content-max: 1300px; /* máximo cómodo */
+  --sidebar-expanded: 220px;
+  --sidebar-collapsed: 60px;
 }
 
-/* Main Content Styles */
+/* ---------- Reset básico ---------- */
+*{ box-sizing: border-box; }
+html,body{ height:100%; }
+body{
+  margin:0;
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: #0f1720;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- MAIN CONTENT (dentro del área que deja la sidebar) ---------- */
+/* Usamos una variable --sidebar-current que cambia con la clase .main-content.expanded */
 .main-content {
-    margin-left: 20%;
-    padding: 2%;
+  --sidebar-current: var(--sidebar-expanded);
+  margin-left: var(--sidebar-current); /* espacio reservado para sidebar */
+  padding: 28px 18px 40px 18px;
+  transition: margin-left .20s ease;
+  min-height: 100vh;
+  display: block; /* importante: mantener flujo normal */
 }
 
-/* Container */
-.container {
-    max-width: 90%;
-    margin: 0 auto;
-    padding: 2%;
+/* Cuando JS agrega .main-content.expanded (sidebar colapsada) actualizamos la variable */
+.main-content.expanded {
+  --sidebar-current: var(--sidebar-collapsed);
+  margin-left: var(--sidebar-current);
 }
 
-/* Tasks Section */
-.tasks-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 2%;
+/* Contenedor interior que usa la anchura disponible entre sidebar y borde derecho */
+.main-inner {
+  /* ancho disponible = viewport - sidebar - small gutter (40px) */
+  width: calc(100vw - var(--sidebar-current) - 40px);
+  max-width: var(--content-max);
+  margin: 0 auto;
 }
 
-/* Tasks Container */
-.tasks-container {
-    flex: 1;
-    margin-right: 2%;
+/* Si el cálculo produce menos de 700px, allow it (responsive) */
+@media (max-width: 980px){
+  .main-inner { width: calc(100vw - var(--sidebar-current) - 24px); padding: 0 6px; }
 }
 
-.tasks-container h2 {
-    font-size: 1.5rem;
-    color: #333;
-    margin-bottom: 1%;
+/* ---------- TOP / CONTROLS ---------- */
+.top-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:18px;
+}
+.top-row h1 { margin:0; font-size:1.45rem; font-weight:700; }
+.btn-add {
+  background:var(--accent);
+  color:#fff;
+  border:none;
+  padding:10px 14px;
+  border-radius:8px;
+  cursor:pointer;
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  box-shadow: 0 8px 22px rgba(15,108,255,0.12);
 }
 
-/* Task Item */
-.task-item {
-    padding: 2%;
-    margin-bottom: 2%;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+/* ---------- "CARD" GENERIC ---------- */
+.card {
+  background: var(--card);
+  border-radius: calc(var(--radius) - 2px);
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+  overflow: visible;
 }
 
-.task-title {
-    font-weight: bold;
-    color: #333;
+/* ---------- CALENDAR (centrado en el espacio disponible) ---------- */
+.calendar-card { padding: 18px; }
+.calendar-wrapper {
+  display:flex;
+  justify-content:center; /* centra el calendar element within main-inner */
+  align-items:flex-start;
 }
 
-.task-description {
-    font-size: 1rem;
-    color: #666;
-}
-
-.task-date {
-    font-size: 1rem;
-    color: #555;
-    margin-top: 1%;
-}
-
-.task-actions button {
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    padding: 1%;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1rem;
-}
-
-.task-actions button:hover {
-    background-color: #0056b3;
-}
-
-/* Add Task Button */
-.add-task-btn {
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    padding: 1%;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1rem;
-}
-
-.add-task-btn:hover {
-    background-color: #0056b3;
-}
-
-/* Calendar Container */
-.calendar-container {
-    margin-top: 2%;
-}
-
-.calendar-container h2 {
-    font-size: 1.5rem;
-    color: #333;
-    margin-bottom: 1%;
-}
-
-/* Calendar */
+/* calendar width: use most of the available width but cap to a comfortable maximum.
+   If the user collapses the sidebar, --sidebar-current becomes smaller and the
+   calc expands accordingly (reduces the right whitespace). */
 #calendar {
-    width: 100%;
-    margin-top: 2%;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  /* take available width inside main-inner but cap at comfortable maximum */
+  max-width: calc(100vw - var(--sidebar-current) - 120px);
+  max-width: min(var(--content-max), calc(100vw - var(--sidebar-current) - 120px));
+  min-width: 420px;
+  min-height: 520px;
+  border-radius: 8px;
 }
 
-/* Modal */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+/* FullCalendar tweaks for visual integration */
+.fc .fc-toolbar-chunk { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.fc .fc-button {
+  padding:6px 10px;
+  border-radius:6px;
+  font-weight:600;
+  border: none;
+  background: #22303a;
+  color: white;
+}
+.fc .fc-button:hover { filter:brightness(.95); }
+.fc .fc-toolbar-title { font-size:1.05rem; font-weight:700; color:#1f2933; }
+
+/* make day grid cells comfortable */
+.fc .fc-daygrid-day-frame { padding: 6px 8px; }
+
+/* event pill visual */
+.fc .fc-daygrid-event {
+  font-size: 0.78rem;
+  padding: 2px 6px;
+  border-radius: 6px;
 }
 
-.modal.active {
-    display: flex;
+/* fallback classes for priorities */
+.fc-event.prioridad-alta { background-color: var(--danger) !important; }
+.fc-event.prioridad-media { background-color: var(--warning) !important; }
+.fc-event.prioridad-baja { background-color: var(--success) !important; }
+
+/* completed event look */
+.fc-event.task-completed { opacity: 0.55; filter:grayscale(.6); }
+
+/* ---------- TASKS ROW: TODAY + PENDING ---------- */
+.tasks-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 8px;
 }
 
-.modal-content {
-    background-color: #fff;
-    padding: 2%;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    width: 80%;
-    max-width: 400px;
+/* tasks card header/body */
+.card-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid #eef2f6;
+}
+.card-header h3 { margin:0; font-size:1.05rem; color:#0f1720; }
+.card-body { padding: 16px; }
+
+/* ---------- TASK ITEM ---------- */
+.task-list { min-height: 60px; }
+
+/* main task item style */
+.task-item {
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  justify-content:space-between;
+  padding:12px;
+  border-radius:8px;
+  background: linear-gradient(180deg,#ffffff,#fbfdff);
+  border-left:4px solid transparent;
+  box-shadow: 0 2px 8px rgba(16,24,40,0.03);
+  margin-bottom:12px;
+  transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+}
+.task-item:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(16,24,40,0.06); }
+
+/* left info (title/desc/meta) */
+.task-info { flex:1; min-width:0; }
+.task-title { font-weight:600; font-size:0.98rem; color:#0f1720; margin-bottom:6px; }
+.task-desc { font-size:0.92rem; color:var(--muted); line-height:1.2; }
+.task-meta { margin-top:8px; color:#94a3b8; font-size:0.85rem; }
+
+/* actions column */
+.task-actions { display:flex; flex-direction:column; gap:8px; align-items:center; margin-left:10px; }
+.action-btn {
+  width:40px; height:40px;
+  border-radius:8px;
+  border:1px solid rgba(20,30,40,0.06);
+  background:transparent;
+  display:inline-flex; align-items:center; justify-content:center;
+  color:#26323a; cursor:pointer;
+  transition: transform .12s ease, background .12s ease, color .12s ease;
+}
+.action-btn:hover { transform: translateY(-3px); background: rgba(15,108,255,0.06); }
+
+/* nice variant badges (if you add classes) */
+.action-btn.complete { color: var(--success); background: linear-gradient(180deg,#e6fbf1,#dff7ea); border-color: rgba(39,174,96,0.12); }
+.action-btn.edit { color: var(--warning); background: linear-gradient(180deg,#fff8e6,#fff5dc); border-color: rgba(243,156,18,0.12); }
+.action-btn.delete { color: var(--danger); background: linear-gradient(180deg,#ffecec,#ffeded); border-color: rgba(231,76,60,0.12); }
+
+/* priority left border classes (JS uses pr-alta/pr-media/pr-baja) */
+.task-item.pr-alta { border-left-color: var(--danger); }
+.task-item.pr-media { border-left-color: var(--warning); }
+.task-item.pr-baja { border-left-color: var(--success); }
+
+/* completed tasks style */
+.task-item.completed { opacity: 0.85; background: linear-gradient(180deg,#fbfbfb,#f8fafb); }
+.task-item.completed .task-title, .task-item.completed .task-desc { text-decoration: line-through; color:#98a3ad; }
+
+/* ---------- MODAL (ADD / EDIT) ---------- */
+.modal { display:none; position:fixed; inset:0; background: rgba(6,9,14,0.45); z-index:2200; align-items:center; justify-content:center; padding:28px; }
+.modal[aria-hidden="false"] { display:flex; }
+.modal-dialog { width:480px; max-width:100%; background:var(--card); border-radius:12px; overflow:hidden; box-shadow: 0 20px 60px rgba(11,22,40,0.20); display:flex; flex-direction:column; }
+.modal-header { padding:18px; border-bottom:1px solid #eef2f6; }
+.modal-body { padding:16px; display:flex; flex-direction:column; gap:10px; }
+.modal-body label { font-size:0.85rem; color:#5b6a76; }
+.modal-body input, .modal-body textarea, .modal-body select { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf3; font-size:0.95rem; }
+.modal-body textarea { min-height:90px; resize:vertical; }
+.grid-2 { display:flex; gap:12px; }
+.grid-2 > div { flex:1; }
+.modal-footer { padding:12px 18px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eef2f6; }
+.btn-save { background: var(--accent); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+.btn-close { background:transparent; border:1px solid #e6edf3; padding:10px 12px; border-radius:8px; cursor:pointer; }
+
+/* ---------- RESPONSIVE ---------- */
+/* Make calendar smaller on narrower windows, keep layout tidy */
+@media (max-width: 1200px){
+  #calendar { min-height: 500px; max-width: calc(100vw - var(--sidebar-current) - 80px); }
+}
+@media (max-width: 980px){
+  .main-inner { width: calc(100vw - var(--sidebar-current) - 24px); }
+  .tasks-row { grid-template-columns: 1fr; gap:12px; }
+  #calendar { min-height: 440px; max-width: 100%; }
+}
+@media (max-width: 640px){
+  .main-content { margin-left: var(--sidebar-collapsed); padding: 12px; } /* default to collapsed layout on tiny screens */
+  .btn-add { padding:8px 10px; font-size:14px; }
+  .task-actions { flex-direction:row; gap:8px; }
+  #calendar { min-height: 360px; }
 }
 
-.modal-content input,
-.modal-content textarea,
-.modal-content button {
-    margin: 2% 0;
-    padding: 1%;
-    width: 100%;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-size: 1rem;
+/* ---------- UTILITIES ---------- */
+img, svg { max-width:100%; height:auto; display:block; }
+a { color: inherit; text-decoration: none; }
+
+/* ---------- Confirm delete button (estética) ---------- */
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-danger:hover { filter: brightness(.95); }
+
+/* Asegurar que el modal de confirmación luzca como el resto */
+#confirm-modal .modal-body p {
+  margin: 0;
+  color: #2b3a4a;
+  font-size: 0.98rem;
+  line-height: 1.4;
 }
 
-.modal-content button {
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
+/* En pantallas pequeñas: asegurar botones lado a lado */
+@media (max-width: 520px) {
+  #confirm-modal .modal-footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  #confirm-modal .btn-danger { width: 100%; }
+  #confirm-modal .btn-close { width: 100%; }
 }
-
-.modal-content button:hover {
-    background-color: #0056b3;
-}
-
-.close-btn {
-    background-color: #dc3545;
-    color: #fff;
-    border: none;
-    padding: 1%;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-top: 1%;
-    transition: background-color 0.3s ease;
-}
-
-.close-btn:hover {
-    background-color: #c82333;
-}
-
