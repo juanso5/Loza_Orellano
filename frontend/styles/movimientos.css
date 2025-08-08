@@ -7,47 +7,6 @@ body {
     color: #333;
 }
 
-/* Sidebar Styles */
-.sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 20%;
-    height: 100%;
-    background-color: #2c3e50;
-    color: #fff;
-    padding: 2%;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar h2 {
-    font-size: 1.5rem;
-    margin-bottom: 2%;
-    color: #ecf0f1;
-}
-
-.sidebar ul {
-    list-style: none;
-    padding: 0;
-}
-
-.sidebar ul li {
-    margin-bottom: 1%;
-}
-
-.sidebar ul li a {
-    text-decoration: none;
-    color: #ecf0f1;
-    font-size: 1rem;
-    display: block;
-    padding: 1%;
-    border-radius: 5px;
-    transition: background-color 0.3s ease;
-}
-
-.sidebar ul li a:hover {
-    background-color: #34495e;
-}
 
 /* Main Content Styles */
 .main-content {
@@ -254,7 +213,6 @@ body {
     background: #eaf1fb;
 }
 
-
 .edit-btn {
     background-color: #7e93ee;
     color: #fff;
@@ -266,9 +224,11 @@ body {
     font-size: 0.95rem;
     transition: background-color 0.3s;
 }
+
 .edit-btn:hover {
     background-color: #4b6cb7;
 }
+
 .delete-btn {
     background-color: #dc3545;
     color: #fff;
@@ -279,6 +239,7 @@ body {
     font-size: 0.95rem;
     transition: background-color 0.3s;
 }
+
 .delete-btn:hover {
     background-color: #c82333;
 }

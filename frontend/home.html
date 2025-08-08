@@ -7,28 +7,14 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css">
     <link rel="stylesheet" href="styles/home.css">
+    <link rel="stylesheet" href="styles/sidebar.css">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
     <script src="components/home.js" defer></script>
+    <script src="components/sidebar.js" defer></script>
 </head>
 <body>
     <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <button id="sidebar-toggle" class="sidebar-toggle">
-            <i class="fas fa-bars"></i>
-        </button>
-        <h2><a href="home.html"><img src="assets/logo.png" class="logo" alt="Logo Inicio"/></a></h2>
-        <ul>
-            <li>
-                <a href="home.html">
-                    <i class="fas fa-home"></i>
-                    <span class="menu-text">Inicio</span>
-                </a>
-            </li>
-            <li><a href="clientes.html"><i class="fas fa-users"></i> <span class="menu-text">Clientes</span></a></li>
-            <li><a href="movimientos.html"><i class="fas fa-exchange-alt"></i> <span class="menu-text">Movimientos</span></a></li>
-            <li><a href="rendimientos.html"><i class="fas fa-chart-line"></i> <span class="menu-text">Rendimientos</span></a></li>
-        </ul>
-    </div>
+    <div id="sidebar-container"></div>
 
     <!-- Main Content -->
     <div class="main-content">
