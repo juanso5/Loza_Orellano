@@ -39,16 +39,124 @@
     </div>
 
     <!-- Modal for Adding/Editing Client -->
-    <div class="modal" id="client-modal">
-        <div class="modal-content">
-            <h2 id="modal-title">Agregar Cliente</h2>
-            <input type="text" id="client-name" placeholder="Nombre del cliente">
-            <input type="text" id="client-financial-data" placeholder="Datos financieros">
-            <input type="text" id="client-risk-profile" placeholder="Perfil de riesgo">
-            <textarea id="client-comments" placeholder="Comentarios"></textarea>
-            <button id="save-client-btn">Guardar</button>
-            <button class="close-btn" id="close-modal-btn">Cerrar</button>
+    <div class="modal" id="client-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-dialog">
+        <div class="modal-header">
+        <h2 id="modal-title">Agregar Cliente</h2>
+        <button type="button" class="modal-close" id="modal-close-x" aria-label="Cerrar">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
         </div>
+
+        <div class="modal-body">
+        <form id="client-form" autocomplete="off" novalidate>
+            <div class="form-grid">
+            <div class="form-group">
+                <label for="client-name">Nombre <span class="required">*</span></label>
+                <div class="input-with-icon">
+                <i class="fa-regular fa-user input-icon"></i>
+                <input type="text" id="client-name" placeholder="" required />
+                </div>
+                <small class="field-hint">Nombre y apellido del cliente</small>
+                <span class="error-message" id="error-name"></span>
+            </div>
+
+            <div class="form-group">
+                <label for="client-email">Email</label>
+                <div class="input-with-icon">
+                <i class="fa-regular fa-envelope input-icon"></i>
+                <input type="email" id="client-email" placeholder="" />
+                </div>
+                <small class="field-hint">Opcional. Se usa para notificaciones</small>
+                <span class="error-message" id="error-email"></span>
+            </div>
+
+            <div class="form-group">
+                <label for="client-phone">Teléfono</label>
+                <div class="input-with-icon">
+                <i class="fa-solid fa-phone input-icon"></i>
+                <input type="text" id="client-phone" placeholder="" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="client-address">Dirección</label>
+                <div class="input-with-icon">
+                <i class="fa-solid fa-location-dot input-icon"></i>
+                <input type="text" id="client-address" placeholder="" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="client-financial-data">Datos financieros</label>
+                <div class="input-with-icon">
+                <i class="fa-solid fa-coins input-icon"></i>
+                <input type="text" id="client-financial-data" placeholder="" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="client-risk-profile">Perfil de riesgo</label>
+                <div class="input-with-icon">
+                <i class="fa-solid fa-gauge-high input-icon"></i>
+                <select id="client-risk-profile">
+                    <option value="">Seleccionar</option>
+                    <option value="Bajo">Bajo</option>
+                    <option value="Moderado">Moderado</option>
+                    <option value="Alto">Alto</option>
+                </select>
+                </div>
+            </div>
+
+            <div class="form-group form-span-2">
+                <label for="client-comments">Comentarios</label>
+                <textarea id="client-comments" placeholder=""></textarea>
+            </div>
+            </div>
+
+            <div class="modal-footer">
+            <button type="button" class="close-btn" id="close-modal-btn">Cancelar</button>
+            <button type="submit" id="save-client-btn" class="save-btn">
+                <i class="fa-regular fa-floppy-disk"></i> Guardar
+            </button>
+            </div>
+        </form>
+        </div>
+    </div>
+    </div>
+
+    <!-- Modal for Viewing Client Details -->
+    <div class="modal" id="view-client-modal">
+        <div class="modal-content">
+            <h2 id="view-client-name">Nombre del cliente</h2>
+            <p><strong>Email:</strong> <span id="view-client-email">No disponible</span></p>
+            <p><strong>Teléfono:</strong> <span id="view-client-phone">No disponible</span></p>
+            <p><strong>Dirección:</strong> <span id="view-client-address">No disponible</span></p>
+            <p><strong>Datos Financieros:</strong> <span id="view-client-financial">No disponible</span></p>
+            <p><strong>Perfil de Riesgo:</strong> <span id="view-client-risk">No disponible</span></p>
+            <p><strong>Comentarios:</strong> <span id="view-client-comments">No disponible</span></p>
+            <button class="close-btn" id="close-view-modal-btn">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación de borrado -->
+    <div class="modal" id="confirm-delete-modal" role="dialog" aria-hidden="true" aria-labelledby="confirm-delete-title">
+      <div class="modal-dialog">
+        <header class="modal-header">
+          <h2 id="confirm-delete-title">Confirmar eliminación</h2>
+        </header>
+        <div class="modal-body">
+          <p id="confirm-delete-text">¿Eliminar este cliente? Esta acción no se puede deshacer.</p>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" id="confirm-delete-btn" class="btn-danger">
+            <i class="fas fa-trash"></i> Eliminar
+          </button>
+          <button type="button" id="cancel-delete-btn" class="btn-close">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+        </footer>
+      </div>
     </div>
 </body>
 </html>

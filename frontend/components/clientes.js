@@ -1,118 +1,258 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const clientsListEl = document.getElementById('clients-list');
-    const openModalBtn = document.getElementById('open-modal-btn');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    const clientModal = document.getElementById('client-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const saveClientBtn = document.getElementById('save-client-btn');
-    const clientNameInput = document.getElementById('client-name');
-    const clientFinancialDataInput = document.getElementById('client-financial-data');
-    const clientRiskProfileInput = document.getElementById('client-risk-profile');
-    const clientCommentsInput = document.getElementById('client-comments');
+  // Listado
+  const clientsListEl = document.getElementById('clients-list');
 
-    let clients = [
-        { id: 1, name: 'Juan Pérez', financialData: 'Activo: $50,000 | Pasivo: $10,000', riskProfile: 'Moderado', comments: 'Cliente estable.' },
-        { id: 2, name: 'Ana Gómez', financialData: 'Activo: $120,000 | Pasivo: $30,000', riskProfile: 'Alto', comments: 'Requiere seguimiento.' },
-        { id: 3, name: 'Carlos López', financialData: 'Activo: $80,000 | Pasivo: $20,000', riskProfile: 'Bajo', comments: 'Buen historial financiero.' }
-    ];
+  // Botones abrir/cerrar modal principal
+  const openModalBtn = document.getElementById('open-modal-btn');
+  const clientModal = document.getElementById('client-modal');
+  const closeModalBtn = document.getElementById('close-modal-btn');
+  const closeModalX = document.getElementById('modal-close-x');
 
-    let editingClientId = null;
+  // Form y campos
+  const clientForm = document.getElementById('client-form');
+  const modalTitle = document.getElementById('modal-title');
+  const saveClientBtn = document.getElementById('save-client-btn');
 
-    // Render clients list
-    function renderClientsList() {
-        clientsListEl.innerHTML = '';
-        clients.forEach(client => {
-            const clientItem = document.createElement('div');
-            clientItem.className = 'client-item';
-            clientItem.innerHTML = `
-                <h3>${client.name}</h3>
-                <p><strong>Datos Financieros:</strong> ${client.financialData}</p>
-                <p><strong>Perfil de Riesgo:</strong> ${client.riskProfile}</p>
-                <p><strong>Comentarios:</strong> ${client.comments}</p>
-                <div class="client-actions">
-                    <button class="edit-btn" data-id="${client.id}">Editar</button>
-                    <button class="delete-btn" data-id="${client.id}">Eliminar</button>
-                </div>
-            `;
-            clientsListEl.appendChild(clientItem);
+  const clientNameInput = document.getElementById('client-name');
+  const clientEmailInput = document.getElementById('client-email');
+  const clientPhoneInput = document.getElementById('client-phone');
+  const clientAddressInput = document.getElementById('client-address');
+  const clientFinancialDataInput = document.getElementById('client-financial-data');
+  const clientRiskProfileInput = document.getElementById('client-risk-profile');
+  const clientCommentsInput = document.getElementById('client-comments');
 
-            clientItem.querySelector('.edit-btn').addEventListener('click', function () {
-                openEditModal(client.id);
-            });
+  // Errores
+  const errorName = document.getElementById('error-name');
+  const errorEmail = document.getElementById('error-email');
 
-            clientItem.querySelector('.delete-btn').addEventListener('click', function () {
-                deleteClient(client.id);
-            });
-        });
+  // Modal confirmación de borrado
+  const confirmModal = document.getElementById('confirm-delete-modal');
+  const confirmText = document.getElementById('confirm-delete-text');
+  const confirmBtn = document.getElementById('confirm-delete-btn');
+  const cancelConfirmBtn = document.getElementById('cancel-delete-btn');
+  
+  const viewModal = document.getElementById('view-client-modal');
+  const closeViewBtn = document.getElementById('close-view-modal-btn');
+
+  // Estado
+  let clients = [];
+  let editingClientId = null;
+  let pendingDeleteId = null;
+  
+  function openViewModal(clientId) {
+    const c = clients.find(x => x.id === clientId);
+    if (!c || !viewModal) return;
+    // Completar campos
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val || 'No disponible';
+    };
+    set('view-client-name', c.name);
+    set('view-client-email', c.email);
+    set('view-client-phone', c.phone);
+    set('view-client-address', c.address);
+    set('view-client-financial', c.financialData);
+    set('view-client-risk', c.riskProfile);
+    set('view-client-comments', c.comments);
+    // Mostrar modal
+    viewModal.classList.add('active');
+  }
+
+  function closeViewModal() {
+    viewModal?.classList.remove('active');
+  }
+
+  // Utilidades UI
+  function openClientModal(isEdit = false) {
+    if (!clientModal) return;
+    clientModal.classList.add('active');
+    if (isEdit) {
+      modalTitle.textContent = 'Editar Cliente';
+    } else {
+      modalTitle.textContent = 'Agregar Cliente';
+      clientForm?.reset();
+      clearErrors();
     }
+    setTimeout(() => clientNameInput?.focus(), 50);
+  }
+  function closeClientModal() {
+    clientModal?.classList.remove('active');
+    editingClientId = null;
+  }
+  function clearErrors() {
+    if (errorName) errorName.textContent = '';
+    if (errorEmail) errorEmail.textContent = '';
+  }
 
-    // Open modal for adding client
-    openModalBtn.addEventListener('click', function () {
-        editingClientId = null;
-        modalTitle.textContent = 'Agregar Cliente';
-        clientNameInput.value = '';
-        clientFinancialDataInput.value = '';
-        clientRiskProfileInput.value = '';
-        clientCommentsInput.value = '';
-        clientModal.classList.add('active');
-    });
-
-    // Open modal for editing client
-    function openEditModal(clientId) {
-        const client = clients.find(c => c.id === clientId);
-        if (client) {
-            editingClientId = clientId;
-            modalTitle.textContent = 'Editar Cliente';
-            clientNameInput.value = client.name;
-            clientFinancialDataInput.value = client.financialData;
-            clientRiskProfileInput.value = client.riskProfile;
-            clientCommentsInput.value = client.comments;
-            clientModal.classList.add('active');
-        }
+  // Mostrar/ocultar confirmación (asegura compatibilidad con CSS por aria-hidden y .active)
+  function openConfirmDelete(id) {
+    pendingDeleteId = id;
+    const c = clients.find(x => x.id === id);
+    if (confirmText) {
+      confirmText.textContent = c
+        ? `¿Eliminar al cliente "${c.name}"? Esta acción no se puede deshacer.`
+        : '¿Eliminar este cliente? Esta acción no se puede deshacer.';
     }
-
-    // Close modal
-    closeModalBtn.addEventListener('click', function () {
-        clientModal.classList.remove('active');
-    });
-
-    // Save client (add or edit)
-    saveClientBtn.addEventListener('click', function () {
-        const name = clientNameInput.value;
-        const financialData = clientFinancialDataInput.value;
-        const riskProfile = clientRiskProfileInput.value;
-        const comments = clientCommentsInput.value;
-
-        if (name && financialData && riskProfile && comments) {
-            if (editingClientId) {
-                const client = clients.find(c => c.id === editingClientId);
-                client.name = name;
-                client.financialData = financialData;
-                client.riskProfile = riskProfile;
-                client.comments = comments;
-            } else {
-                const newClient = {
-                    id: clients.length + 1,
-                    name,
-                    financialData,
-                    riskProfile,
-                    comments
-                };
-                clients.push(newClient);
-            }
-            clientModal.classList.remove('active');
-            renderClientsList();
-        } else {
-            alert('Por favor, complete todos los campos.');
-        }
-    });
-
-    // Delete client
-    function deleteClient(clientId) {
-        clients = clients.filter(c => c.id !== clientId);
-        renderClientsList();
+    if (confirmModal) {
+      confirmModal.setAttribute('aria-hidden', 'false');
+      confirmModal.classList.add('active'); // extra: aseguro visibilidad con .active
     }
+  }
+  function closeConfirmDelete() {
+    pendingDeleteId = null;
+    if (confirmModal) {
+      confirmModal.setAttribute('aria-hidden', 'true');
+      confirmModal.classList.remove('active');
+    }
+  }
 
-    // Initial render
+  // CRUD
+  function renderClientsList() {
+    if (!clientsListEl) return;
+    clientsListEl.innerHTML = '';
+    if (!clients.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-list';
+      empty.textContent = 'Sin clientes aún.';
+      clientsListEl.appendChild(empty);
+      return;
+    }
+    clients.forEach(c => {
+      const item = document.createElement('div');
+      item.className = 'client-item';
+      item.innerHTML = `
+        <div class="client-main">
+          <h3 class="client-name">${c.name}</h3>
+          <div class="client-meta">
+            ${c.email ? `<span><i class="fa-regular fa-envelope"></i> ${c.email}</span>` : ''}
+            ${c.phone ? `<span><i class="fa-solid fa-phone"></i> ${c.phone}</span>` : ''}
+            ${c.riskProfile ? `<span><i class="fa-solid fa-gauge-high"></i> ${c.riskProfile}</span>` : ''}
+          </div>
+        </div>
+        <div class="client-actions">
+          <button class="action-btn edit-btn" title="Editar" aria-label="Editar cliente">
+            <i class="fas fa-pen"></i>
+          </button>
+          <button class="action-btn delete-btn" title="Eliminar" aria-label="Eliminar cliente">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      `;
+      // Abrir vista al clickear el item (evitar si clic en botones)
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.edit-btn') || e.target.closest('.delete-btn')) return;
+        openViewModal(c.id);
+      });
+      // Editar
+      item.querySelector('.edit-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEdit(c.id);
+      });
+      // Eliminar (confirm)
+      item.querySelector('.delete-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openConfirmDelete(c.id);
+      });
+      clientsListEl.appendChild(item);
+    });
+  }
+
+  function openEdit(id) {
+    const c = clients.find(x => x.id === id);
+    if (!c) return;
+    editingClientId = id;
+    clientNameInput.value = c.name || '';
+    clientEmailInput.value = c.email || '';
+    clientPhoneInput.value = c.phone || '';
+    clientAddressInput.value = c.address || '';
+    clientFinancialDataInput.value = c.financialData || '';
+    clientRiskProfileInput.value = c.riskProfile || '';
+    clientCommentsInput.value = c.comments || '';
+    clearErrors();
+    openClientModal(true);
+  }
+
+  function upsertFromForm() {
+    clearErrors();
+    const name = clientNameInput.value.trim();
+    const email = clientEmailInput.value.trim();
+    const phone = clientPhoneInput.value.trim();
+    const address = clientAddressInput.value.trim();
+    const financialData = clientFinancialDataInput.value.trim();
+    const riskProfile = clientRiskProfileInput.value;
+    const comments = clientCommentsInput.value.trim();
+
+    let hasError = false;
+    if (!name) {
+      if (errorName) errorName.textContent = 'El nombre es obligatorio.';
+      hasError = true;
+    }
+    if (email) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!re.test(email)) {
+        if (errorEmail) errorEmail.textContent = 'Ingrese un email válido.';
+        hasError = true;
+      }
+    }
+    if (hasError) return false;
+
+    if (editingClientId) {
+      const c = clients.find(x => x.id === editingClientId);
+      if (c) Object.assign(c, { name, email, phone, address, financialData, riskProfile, comments });
+    } else {
+      const id = clients.length ? Math.max(...clients.map(x => x.id)) + 1 : 1;
+      clients.push({ id, name, email, phone, address, financialData, riskProfile, comments });
+    }
+    return true;
+  }
+
+  function deleteClient(id) {
+    clients = clients.filter(x => x.id !== id);
+  }
+
+  // Eventos UI
+  openModalBtn?.addEventListener('click', () => openClientModal(false));
+  closeModalBtn?.addEventListener('click', closeClientModal);
+  closeModalX?.addEventListener('click', closeClientModal);
+  clientModal?.addEventListener('click', (e) => { if (e.target === clientModal) closeClientModal(); });
+
+  // Cierres de modales
+  closeViewBtn?.addEventListener('click', closeViewModal);
+  viewModal?.addEventListener('click', (e) => { if (e.target === viewModal) closeViewModal(); });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (clientModal?.classList.contains('active')) closeClientModal();
+      if (viewModal?.classList.contains('active')) closeViewModal();
+      if (confirmModal && confirmModal.getAttribute('aria-hidden') === 'false') closeConfirmDelete();
+    }
+  });
+
+  // Submit formulario (usar submit del form, no el click del botón)
+  clientForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const ok = upsertFromForm();
+    if (!ok) return;
     renderClientsList();
+    clientForm.reset();
+    closeClientModal();
+  });
+
+  // Confirmación de borrado
+  confirmBtn?.addEventListener('click', () => {
+    if (pendingDeleteId != null) {
+      deleteClient(pendingDeleteId);
+      renderClientsList();
+    }
+    closeConfirmDelete();
+  });
+  cancelConfirmBtn?.addEventListener('click', closeConfirmDelete);
+  confirmModal?.addEventListener('click', (e) => { if (e.target === confirmModal) closeConfirmDelete(); });
+
+  // Datos demo opcionales
+  clients = [
+    { id: 1, name: 'Juancito Pérez', email: 'juan@example.com', phone: '+54 9 11 1234-5678', riskProfile: 'Moderado' },
+    { id: 2, name: 'Ana Gómez', email: 'ana@example.com', phone: '+54 9 11 9876-5432', riskProfile: 'Bajo' }
+  ];
+  renderClientsList();
 });
