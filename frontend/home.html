@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="styles/sidebar.css">
   <link rel="stylesheet" href="styles/home.css">
 </head>
-    <body>
+<body>
   <!-- Sidebar (se carga desde components/sidebar.js) -->
   <div id="sidebar-container"></div>
 
@@ -29,7 +29,7 @@
         </div>
       </div>
 
-      <!-- === TASKS ROW (AHORA ARRIBA) === -->
+      <!-- === TASKS ROW (ARRIBA) === -->
       <div class="tasks-row">
         <div class="card tasks-card">
           <div class="card-header"><h3>Tareas de Hoy</h3></div>
@@ -39,6 +39,11 @@
         <div class="card tasks-card">
           <div class="card-header"><h3>Tareas Pendientes</h3></div>
           <div id="pending-tasks" class="card-body task-list"></div>
+
+          <!-- ver más / ver menos -->
+          <div style="padding:10px 12px; border-top:1px solid #eef2f6; background:#fff;">
+            <button id="toggle-more-pending" class="btn" style="display:block; width:100%;">Ver más</button>
+          </div>
         </div>
       </div>
 
@@ -89,7 +94,7 @@
     </div>
   </div>
 
-  <!-- CONFIRM DELETE MODAL (nuevo) -->
+  <!-- CONFIRM DELETE MODAL -->
   <div id="confirm-modal" class="modal" aria-hidden="true">
     <div class="modal-dialog">
       <header class="modal-header">
