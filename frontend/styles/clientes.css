@@ -277,6 +277,9 @@ body {
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px 16px; }
 .form-span-2 { grid-column: 1 / -1; }
 
+/* Evitar reflujo al ocultar/mostrar campos condicionales */
+.form-grid { grid-auto-flow: row; }
+
 .form-group { display: flex; flex-direction: column; }
 .form-group label { font-size: .92rem; font-weight: 600; color:#1f2937; margin-bottom: 6px; }
 .required { color: #dc3545; }
@@ -488,4 +491,10 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* Mantener el hueco en la grilla (no cambia tamaños) */
+.conditional-group.hidden {
+  visibility: hidden;
+  pointer-events: none;
 }

@@ -61,6 +61,15 @@
                 <span class="error-message" id="error-name"></span>
             </div>
 
+            <!-- Fecha y hora de alta -->
+            <div class="form-group">
+              <label for="client-joined">Fecha y hora de alta</label>
+              <div class="input-with-icon">
+                <i class="fa-regular fa-calendar-plus input-icon"></i>
+                <input type="datetime-local" id="client-joined" />
+              </div>
+            </div>
+
             <!-- Email -->
             <div class="form-group">
                 <label for="client-email">Email</label>
@@ -112,16 +121,37 @@
             <div class="form-group">
                 <label for="client-risk-profile">Perfil de riesgo</label>
                 <div class="input-with-icon">
-                <i class="fa-solid fa-gauge-high input-icon"></i>
-                <select id="client-risk-profile">
-                    <option value="">Seleccionar</option>
+                  <i class="fa-solid fa-gauge-high input-icon"></i>
+                  <select id="client-risk-profile">
                     <option value="Bajo">Bajo</option>
                     <option value="Moderado">Moderado</option>
                     <option value="Alto">Alto</option>
-                </select>
+                  </select>
                 </div>
             </div>
 
+            <!-- Tipo de servicio -->
+            <div class="form-group" id="group-service-type">
+              <label for="client-service-type">Tipo de servicio</label>
+              <div class="input-with-icon">
+                <i class="fa-solid fa-briefcase input-icon"></i>
+                <select id="client-service-type">
+                  <option value="Integral">Integral</option>
+                  <option value="Cartera Administrada">Cartera Administrada</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Campos extra cuando es "Integral" -->
+            <div id="service-integral-fields" class="form-group conditional-group">
+              <label for="client-salary">Sueldo (mensual)</label>
+              <div class="input-with-icon">
+                <i class="fa-solid fa-money-bill-wave input-icon"></i>
+                <input type="number" id="client-salary" placeholder="" min="0" step="0.01" />
+              </div>
+              <small class="field-hint">Sueldo neto mensual (opcional)</small>
+              <span class="error-message" id="error-salary"></span>
+            </div>
 
             <!-- Comments -->
             <div class="form-group form-span-2">
@@ -134,8 +164,7 @@
             <!-- Modal Footer -->
             <div class="modal-footer">
             <button type="button" class="btn-close" id="close-modal-btn">Cancelar</button>
-            <button type="submit" id="save-client-btn" class="btn-save">
-                <i class="fa-regular fa-floppy-disk"></i> Guardar
+            <button type="submit" id="save-client-btn" class="btn-save", id="save-client-btn">Guardar</button>
             </button>
             </div>
         </form>
@@ -148,6 +177,9 @@
     <div class="modal-content">
         <h2 id="view-client-name">Nombre del cliente</h2>
         <p><strong>CUIT:</strong> <span id="view-client-cuit">No disponible</span></p>
+        <p><strong>Tipo de servicio:</strong> <span id="view-client-service">No disponible</span></p>
+        <p><strong>Fecha de alta:</strong> <span id="view-client-joined">No disponible</span></p>
+        <p><strong>Sueldo:</strong> <span id="view-client-salary">No disponible</span></p>
         <p><strong>Email:</strong> <span id="view-client-email">No disponible</span></p>
         <p><strong>Teléfono:</strong> <span id="view-client-phone">No disponible</span></p>
         <p><strong>Dirección:</strong> <span id="view-client-address">No disponible</span></p>

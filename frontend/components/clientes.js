@@ -19,8 +19,16 @@ document.addEventListener('DOMContentLoaded', function () {
   const clientAddressInput = document.getElementById('client-address');
   const clientFinancialDataInput = document.getElementById('client-financial-data');
   const clientRiskProfileInput = document.getElementById('client-risk-profile');
+  const clientServiceTypeInput = document.getElementById('client-service-type');
+  const clientSalaryInput = document.getElementById('client-salary');
+  const integralFields = document.getElementById('service-integral-fields');
+  const serviceTypeGroup = document.getElementById('group-service-type');
   const clientCommentsInput = document.getElementById('client-comments');
-  
+  const clientJoinedInput = document.getElementById('client-joined');
+
+  // Formato ARS
+  const fmtARS = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 });
+
   // Búsqueda en vivo
   const searchInput = document.getElementById('search-input');
 
@@ -28,6 +36,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const errorName = document.getElementById('error-name');
   const errorEmail = document.getElementById('error-email');
   const errorCuit = document.getElementById('error-cuit');
+  const errorSalary = document.getElementById('error-salary');
 
   // Modal confirmación de borrado
   const confirmModal = document.getElementById('confirm-delete-modal');
@@ -48,6 +57,51 @@ document.addEventListener('DOMContentLoaded', function () {
   const onlyDigits = (s) => (s || '').replace(/\D/g, '');
   function formatCuit(digits) { /* ...existing code... */ }
   function isValidCuit(raw) { /* ...existing code... */ }
+
+  // Utils fecha/hora
+  function pad2(n){ return n.toString().padStart(2,'0'); }
+  // Devuelve 'YYYY-MM-DDTHH:MM' en horario local (para input datetime-local)
+  function nowLocalForInput() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = pad2(d.getMonth()+1);
+    const dd = pad2(d.getDate());
+    const hh = pad2(d.getHours());
+    const mi = pad2(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  }
+  function isoFromLocalInput(localStr) {
+    // localStr: 'YYYY-MM-DDTHH:MM'
+    if (!localStr) return new Date().toISOString();
+    const d = new Date(localStr);
+    // Si el constructor no entiende la zona, forzamos a local componiendo manual
+    if (Number.isNaN(d.getTime())) {
+      const [date, time] = localStr.split('T');
+      const [y,m,day] = date.split('-').map(Number);
+      const [h,min] = (time || '00:00').split(':').map(Number);
+      return new Date(y, (m||1)-1, day||1, h||0, min||0, 0, 0).toISOString();
+    }
+    return d.toISOString();
+  }
+  function inputFromISO(isoStr) {
+    if (!isoStr) return nowLocalForInput();
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return nowLocalForInput();
+    const yyyy = d.getFullYear();
+    const mm = pad2(d.getMonth()+1);
+    const dd = pad2(d.getDate());
+    const hh = pad2(d.getHours());
+    const mi = pad2(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  }
+  function formatEsDateTime(isoStr){
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    if (Number.isNaN(d.getTime())) return '';
+    const fecha = d.toLocaleDateString('es-AR', { year:'numeric', month:'2-digit', day:'2-digit' });
+    const hora = d.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+    return `${fecha} ${hora}`;
+  }
 
   // Normalizar texto para comparar nombres (quita tildes y pasa a minúsculas)
   const normalize = (s) =>
@@ -81,6 +135,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if (el) el.textContent = val || 'No disponible';
     };
     set('view-client-name', c.name);
+    set('view-client-joined', formatEsDateTime(c.joinedAt));
+    set('view-client-service', c.serviceType);
+    set('view-client-salary', (typeof c.salary === 'number') ? fmtARS.format(c.salary) : (c.salary || ''));
     set('view-client-cuit', c.cuit);
     set('view-client-email', c.email);
     set('view-client-phone', c.phone);
@@ -92,6 +149,16 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   function closeViewModal() { viewModal?.classList.remove('active'); }
 
+
+  // Mostrar/ocultar campos cuando el tipo de servicio cambia (sin alterar tamaños)
+  function updateServiceConditionalUI() {
+    const isIntegral = clientServiceTypeInput?.value === 'Integral';
+    if (integralFields) {
+      integralFields.classList.toggle('hidden', !isIntegral);
+    }
+  }
+  clientServiceTypeInput?.addEventListener('change', updateServiceConditionalUI);
+
   // UI helpers
   function openClientModal(isEdit = false) {
     if (!clientModal) return;
@@ -102,7 +169,11 @@ document.addEventListener('DOMContentLoaded', function () {
       modalTitle.textContent = 'Agregar Cliente';
       clientForm?.reset();
       clearErrors();
+      // Default: fecha/hora actual
+      if (clientJoinedInput) clientJoinedInput.value = nowLocalForInput();
     }
+    // Ajustar visibilidad condicional al abrir
+    updateServiceConditionalUI();
     setTimeout(() => clientNameInput?.focus(), 50);
   }
   function closeClientModal() {
@@ -113,6 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (errorName) errorName.textContent = '';
     if (errorEmail) errorEmail.textContent = '';
     if (errorCuit) errorCuit.textContent = '';
+    if (errorSalary) errorSalary.textContent = '';
   }
 
   // Confirm delete modal
@@ -157,6 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="client-main">
           <h3 class="client-name">${c.name}</h3>
           <div class="client-meta">
+            ${c.serviceType ? `<span><i class="fa-solid fa-briefcase"></i> ${c.serviceType}</span>` : ''}
             ${c.cuit ? `<span><i class="fa-regular fa-id-card"></i> ${c.cuit}</span>` : ''}
             ${c.email ? `<span><i class="fa-regular fa-envelope"></i> ${c.email}</span>` : ''}
             ${c.phone ? `<span><i class="fa-solid fa-phone"></i> ${c.phone}</span>` : ''}
@@ -199,9 +272,14 @@ document.addEventListener('DOMContentLoaded', function () {
     clientAddressInput.value = c.address || '';
     clientFinancialDataInput.value = c.financialData || '';
     clientRiskProfileInput.value = c.riskProfile || '';
+    clientServiceTypeInput.value = c.serviceType || '';
     clientCommentsInput.value = c.comments || '';
+    clientSalaryInput.value = (typeof c.salary === 'number') ? c.salary : (c.salary || '');
+    // Fecha/hora: usar la guardada o actual
+    if (clientJoinedInput) clientJoinedInput.value = inputFromISO(c.joinedAt);
     clearErrors();
     openClientModal(true);
+    updateServiceConditionalUI();
   }
 
   function upsertFromForm() {
@@ -213,6 +291,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const address = clientAddressInput.value.trim();
     const financialData = clientFinancialDataInput.value.trim();
     const riskProfile = clientRiskProfileInput.value;
+    const serviceType = clientServiceTypeInput.value;
+    const salaryRaw = (clientSalaryInput?.value ?? '').toString().trim();
+    const joinedRaw = (clientJoinedInput?.value ?? '').toString().trim();
     const comments = clientCommentsInput.value.trim();
 
     let hasError = false;
@@ -233,17 +314,32 @@ document.addEventListener('DOMContentLoaded', function () {
         hasError = true;
       }
     }
+    // Validación de sueldo solo cuando es Integral (opcional, pero debe ser número >= 0 si se completa)
+    let salary = undefined;
+    if (serviceType === 'Integral' && salaryRaw !== '') {
+      const n = Number(salaryRaw.replace(',', '.'));
+      if (Number.isNaN(n) || n < 0) {
+        if (errorSalary) errorSalary.textContent = 'Ingrese un sueldo válido (número mayor o igual a 0).';
+        hasError = true;
+      } else {
+        salary = n;
+      }
+    } else if (serviceType !== 'Integral') {
+      salary = undefined; // no aplica
+    }
+
     if (hasError) return false;
 
     const cuitDigits = onlyDigits(cuitRaw);
     const cuit = cuitDigits.length === 11 ? formatCuit(cuitDigits) : '';
+    const joinedAt = isoFromLocalInput(joinedRaw) || new Date().toISOString();
 
     if (editingClientId) {
       const c = clients.find(x => x.id === editingClientId);
-      if (c) Object.assign(c, { name, cuit, email, phone, address, financialData, riskProfile, comments });
+      if (c) Object.assign(c, { name, cuit, email, phone, address, financialData, riskProfile, serviceType, salary, joinedAt, comments });
     } else {
       const id = clients.length ? Math.max(...clients.map(x => x.id)) + 1 : 1;
-      clients.push({ id, name, cuit, email, phone, address, financialData, riskProfile, comments });
+      clients.push({ id, name, cuit, email, phone, address, financialData, riskProfile, serviceType, salary, joinedAt, comments });
     }
     return true;
   }
@@ -281,12 +377,18 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Confirmación de borrado
-  confirmBtn?.addEventListener('click', () => {
-    if (pendingDeleteId != null) {
-      deleteClient(pendingDeleteId);
-     applyFilterAndRender();
-    }
+  cancelConfirmBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     closeConfirmDelete();
+  });
+
+  // Cerrar al hacer click en el fondo (overlay) sin interferir con el contenido
+  confirmModal?.addEventListener('mousedown', (e) => {
+    if (e.target === confirmModal) {
+      e.preventDefault();
+      closeConfirmDelete();
+    }
   });
 
   // Búsqueda en vivo
@@ -294,8 +396,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Datos demo opcionales
   clients = [
-    { id: 1, name: 'Juancito Pérez', cuit: '20-12345678-3', email: 'juan@example.com', phone: '+54 9 11 1234-5678', riskProfile: 'Moderado' },
-    { id: 2, name: 'Ana Gómez', cuit: '27-00000000-5', email: 'ana@example.com', phone: '+54 9 11 9876-5432', riskProfile: 'Bajo' }
+    { id: 1, name: 'Juancito Pérez', cuit: '20-12345678-3', email: 'juan@example.com', phone: '+54 9 11 1234-5678', riskProfile: 'Moderado', serviceType: 'Integral', joinedAt: new Date().toISOString() },
+    { id: 2, name: 'Ana Gómez', cuit: '27-00000000-5', email: 'ana@example.com', phone: '+54 9 11 9876-5432', riskProfile: 'Bajo', serviceType: 'Cartera Administrada', joinedAt: new Date().toISOString() }
   ];
   applyFilterAndRender();
 });
