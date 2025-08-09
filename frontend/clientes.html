@@ -19,18 +19,17 @@
         <div class="container">
             <!-- Search Bar -->
             <div class="search-bar">
-                <input type="text" id="search-input" placeholder="Buscar cliente por nombre...">
-                <button id="search-btn">Buscar</button>
-            </div>
-
-            <!-- Add Client Button -->
-            <div class="add-client">
-                <button id="open-modal-btn">Agregar Cliente</button>
+                <input type="text" id="search-input" placeholder="Buscar por nombre o CUIT...">
+                <div class="search-actions">
+                    <button id="open-modal-btn" class="btn-add">
+                        <i class="fas fa-plus"></i> Agregar Cliente
+                    </button>
+                </div>
             </div>
 
             <!-- Clients List -->
             <div class="clients-section">
-                <h2>Listado de Clientes</h2>
+                <h2>Lista de Clientes</h2>
                 <div id="clients-list">
                     <!-- Clients will be dynamically added here -->
                 </div>
@@ -38,7 +37,7 @@
         </div>
     </div>
 
-    <!-- Modal for Adding/Editing Client -->
+    <!-- Modal para Agregar/Eliminar cliente -->
     <div class="modal" id="client-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-dialog">
         <div class="modal-header">
@@ -51,42 +50,56 @@
         <div class="modal-body">
         <form id="client-form" autocomplete="off" novalidate>
             <div class="form-grid">
+
+            <!-- Name -->
             <div class="form-group">
                 <label for="client-name">Nombre <span class="required">*</span></label>
                 <div class="input-with-icon">
                 <i class="fa-regular fa-user input-icon"></i>
                 <input type="text" id="client-name" placeholder="" required />
                 </div>
-                <small class="field-hint">Nombre y apellido del cliente</small>
                 <span class="error-message" id="error-name"></span>
             </div>
 
+            <!-- Email -->
             <div class="form-group">
                 <label for="client-email">Email</label>
                 <div class="input-with-icon">
                 <i class="fa-regular fa-envelope input-icon"></i>
                 <input type="email" id="client-email" placeholder="" />
                 </div>
-                <small class="field-hint">Opcional. Se usa para notificaciones</small>
                 <span class="error-message" id="error-email"></span>
             </div>
 
+            <!-- Phone number -->
             <div class="form-group">
                 <label for="client-phone">Teléfono</label>
                 <div class="input-with-icon">
-                <i class="fa-solid fa-phone input-icon"></i>
-                <input type="text" id="client-phone" placeholder="" />
+                    <i class="fa-solid fa-phone input-icon"></i>
+                    <input type="text" id="client-phone" placeholder="" />
                 </div>
             </div>
 
+            <!-- CUIT -->
+            <div class="form-group">
+                <label for="client-cuit">CUIT</label>
+                <div class="input-with-icon">
+                    <i class="fa-regular fa-id-card input-icon"></i>
+                    <input type="text" id="client-cuit" placeholder="" inputmode="numeric" />
+                </div>
+                <span class="error-message" id="error-cuit"></span>
+            </div>
+
+            <!-- Address -->
             <div class="form-group">
                 <label for="client-address">Dirección</label>
                 <div class="input-with-icon">
-                <i class="fa-solid fa-location-dot input-icon"></i>
-                <input type="text" id="client-address" placeholder="" />
+                    <i class="fa-solid fa-location-dot input-icon"></i>
+                    <input type="text" id="client-address" placeholder="" />
                 </div>
             </div>
 
+            <!-- Financial Data -->
             <div class="form-group">
                 <label for="client-financial-data">Datos financieros</label>
                 <div class="input-with-icon">
@@ -95,6 +108,7 @@
                 </div>
             </div>
 
+            <!-- Risk Profile -->
             <div class="form-group">
                 <label for="client-risk-profile">Perfil de riesgo</label>
                 <div class="input-with-icon">
@@ -108,15 +122,19 @@
                 </div>
             </div>
 
+
+            <!-- Comments -->
             <div class="form-group form-span-2">
                 <label for="client-comments">Comentarios</label>
                 <textarea id="client-comments" placeholder=""></textarea>
             </div>
             </div>
 
+
+            <!-- Modal Footer -->
             <div class="modal-footer">
-            <button type="button" class="close-btn" id="close-modal-btn">Cancelar</button>
-            <button type="submit" id="save-client-btn" class="save-btn">
+            <button type="button" class="btn-close" id="close-modal-btn">Cancelar</button>
+            <button type="submit" id="save-client-btn" class="btn-save">
                 <i class="fa-regular fa-floppy-disk"></i> Guardar
             </button>
             </div>
@@ -127,19 +145,20 @@
 
     <!-- Modal for Viewing Client Details -->
     <div class="modal" id="view-client-modal">
-        <div class="modal-content">
-            <h2 id="view-client-name">Nombre del cliente</h2>
-            <p><strong>Email:</strong> <span id="view-client-email">No disponible</span></p>
-            <p><strong>Teléfono:</strong> <span id="view-client-phone">No disponible</span></p>
-            <p><strong>Dirección:</strong> <span id="view-client-address">No disponible</span></p>
-            <p><strong>Datos Financieros:</strong> <span id="view-client-financial">No disponible</span></p>
-            <p><strong>Perfil de Riesgo:</strong> <span id="view-client-risk">No disponible</span></p>
-            <p><strong>Comentarios:</strong> <span id="view-client-comments">No disponible</span></p>
-            <button class="close-btn" id="close-view-modal-btn">Cerrar</button>
-        </div>
+    <div class="modal-content">
+        <h2 id="view-client-name">Nombre del cliente</h2>
+        <p><strong>CUIT:</strong> <span id="view-client-cuit">No disponible</span></p>
+        <p><strong>Email:</strong> <span id="view-client-email">No disponible</span></p>
+        <p><strong>Teléfono:</strong> <span id="view-client-phone">No disponible</span></p>
+        <p><strong>Dirección:</strong> <span id="view-client-address">No disponible</span></p>
+        <p><strong>Datos Financieros:</strong> <span id="view-client-financial">No disponible</span></p>
+        <p><strong>Perfil de Riesgo:</strong> <span id="view-client-risk">No disponible</span></p>
+        <p><strong>Comentarios:</strong> <span id="view-client-comments">No disponible</span></p>
+        <button class="close-btn" id="close-view-modal-btn">Cerrar</button>
+    </div>
     </div>
 
-    <!-- Modal de confirmación de borrado -->
+    <!-- Modal for Confirming Deletion -->
     <div class="modal" id="confirm-delete-modal" role="dialog" aria-hidden="true" aria-labelledby="confirm-delete-title">
       <div class="modal-dialog">
         <header class="modal-header">

@@ -11,19 +11,23 @@ document.addEventListener('DOMContentLoaded', function () {
   // Form y campos
   const clientForm = document.getElementById('client-form');
   const modalTitle = document.getElementById('modal-title');
-  const saveClientBtn = document.getElementById('save-client-btn');
 
   const clientNameInput = document.getElementById('client-name');
   const clientEmailInput = document.getElementById('client-email');
   const clientPhoneInput = document.getElementById('client-phone');
+  const clientCuitInput = document.getElementById('client-cuit');
   const clientAddressInput = document.getElementById('client-address');
   const clientFinancialDataInput = document.getElementById('client-financial-data');
   const clientRiskProfileInput = document.getElementById('client-risk-profile');
   const clientCommentsInput = document.getElementById('client-comments');
+  
+  // Búsqueda en vivo
+  const searchInput = document.getElementById('search-input');
 
   // Errores
   const errorName = document.getElementById('error-name');
   const errorEmail = document.getElementById('error-email');
+  const errorCuit = document.getElementById('error-cuit');
 
   // Modal confirmación de borrado
   const confirmModal = document.getElementById('confirm-delete-modal');
@@ -31,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const confirmBtn = document.getElementById('confirm-delete-btn');
   const cancelConfirmBtn = document.getElementById('cancel-delete-btn');
   
+  // Modal ver cliente
   const viewModal = document.getElementById('view-client-modal');
   const closeViewBtn = document.getElementById('close-view-modal-btn');
 
@@ -38,31 +43,56 @@ document.addEventListener('DOMContentLoaded', function () {
   let clients = [];
   let editingClientId = null;
   let pendingDeleteId = null;
-  
+
+  // Utils CUIT
+  const onlyDigits = (s) => (s || '').replace(/\D/g, '');
+  function formatCuit(digits) { /* ...existing code... */ }
+  function isValidCuit(raw) { /* ...existing code... */ }
+
+  // Normalizar texto para comparar nombres (quita tildes y pasa a minúsculas)
+  const normalize = (s) =>
+    (s || '').toString().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  function filterClients(query) {
+    const q = (query || '').trim();
+    if (!q) return clients;
+    const qText = normalize(q);
+    const qDigits = onlyDigits(q);
+
+    return clients.filter(c => {
+      const nameMatch = normalize(c.name).includes(qText);
+      const cuitDigits = onlyDigits(c.cuit || '');
+      const cuitMatch = qDigits.length >= 2 && cuitDigits.includes(qDigits);
+      return nameMatch || cuitMatch;
+    });
+  }
+
+  function applyFilterAndRender() {
+    const list = filterClients(searchInput?.value || '');
+    renderClientsList(list);
+  }
+
   function openViewModal(clientId) {
     const c = clients.find(x => x.id === clientId);
     if (!c || !viewModal) return;
-    // Completar campos
     const set = (id, val) => {
       const el = document.getElementById(id);
       if (el) el.textContent = val || 'No disponible';
     };
     set('view-client-name', c.name);
+    set('view-client-cuit', c.cuit);
     set('view-client-email', c.email);
     set('view-client-phone', c.phone);
     set('view-client-address', c.address);
     set('view-client-financial', c.financialData);
     set('view-client-risk', c.riskProfile);
     set('view-client-comments', c.comments);
-    // Mostrar modal
     viewModal.classList.add('active');
   }
+  function closeViewModal() { viewModal?.classList.remove('active'); }
 
-  function closeViewModal() {
-    viewModal?.classList.remove('active');
-  }
-
-  // Utilidades UI
+  // UI helpers
   function openClientModal(isEdit = false) {
     if (!clientModal) return;
     clientModal.classList.add('active');
@@ -82,9 +112,10 @@ document.addEventListener('DOMContentLoaded', function () {
   function clearErrors() {
     if (errorName) errorName.textContent = '';
     if (errorEmail) errorEmail.textContent = '';
+    if (errorCuit) errorCuit.textContent = '';
   }
 
-  // Mostrar/ocultar confirmación (asegura compatibilidad con CSS por aria-hidden y .active)
+  // Confirm delete modal
   function openConfirmDelete(id) {
     pendingDeleteId = id;
     const c = clients.find(x => x.id === id);
@@ -95,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (confirmModal) {
       confirmModal.setAttribute('aria-hidden', 'false');
-      confirmModal.classList.add('active'); // extra: aseguro visibilidad con .active
+      confirmModal.classList.add('active');
     }
   }
   function closeConfirmDelete() {
@@ -106,24 +137,27 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // CRUD
-  function renderClientsList() {
+    // CRUD
+  function renderClientsList(list = clients) {
     if (!clientsListEl) return;
     clientsListEl.innerHTML = '';
-    if (!clients.length) {
+    if (!list.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-list';
-      empty.textContent = 'Sin clientes aún.';
+      empty.textContent = (searchInput && searchInput.value?.trim())
+        ? 'No hay clientes que coincidan.'
+        : 'Sin clientes aún.';
       clientsListEl.appendChild(empty);
       return;
     }
-    clients.forEach(c => {
+    list.forEach(c => {
       const item = document.createElement('div');
       item.className = 'client-item';
       item.innerHTML = `
         <div class="client-main">
           <h3 class="client-name">${c.name}</h3>
           <div class="client-meta">
+            ${c.cuit ? `<span><i class="fa-regular fa-id-card"></i> ${c.cuit}</span>` : ''}
             ${c.email ? `<span><i class="fa-regular fa-envelope"></i> ${c.email}</span>` : ''}
             ${c.phone ? `<span><i class="fa-solid fa-phone"></i> ${c.phone}</span>` : ''}
             ${c.riskProfile ? `<span><i class="fa-solid fa-gauge-high"></i> ${c.riskProfile}</span>` : ''}
@@ -138,17 +172,14 @@ document.addEventListener('DOMContentLoaded', function () {
           </button>
         </div>
       `;
-      // Abrir vista al clickear el item (evitar si clic en botones)
       item.addEventListener('click', (e) => {
         if (e.target.closest('.edit-btn') || e.target.closest('.delete-btn')) return;
         openViewModal(c.id);
       });
-      // Editar
       item.querySelector('.edit-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
         openEdit(c.id);
       });
-      // Eliminar (confirm)
       item.querySelector('.delete-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
         openConfirmDelete(c.id);
@@ -162,6 +193,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!c) return;
     editingClientId = id;
     clientNameInput.value = c.name || '';
+    clientCuitInput.value = c.cuit || '';
     clientEmailInput.value = c.email || '';
     clientPhoneInput.value = c.phone || '';
     clientAddressInput.value = c.address || '';
@@ -175,6 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function upsertFromForm() {
     clearErrors();
     const name = clientNameInput.value.trim();
+    const cuitRaw = clientCuitInput.value.trim();
     const email = clientEmailInput.value.trim();
     const phone = clientPhoneInput.value.trim();
     const address = clientAddressInput.value.trim();
@@ -194,14 +227,23 @@ document.addEventListener('DOMContentLoaded', function () {
         hasError = true;
       }
     }
+    if (cuitRaw) {
+      if (!isValidCuit(cuitRaw)) {
+        if (errorCuit) errorCuit.textContent = 'CUIT inválido. Debe tener 11 dígitos (ej. 20-12345678-3).';
+        hasError = true;
+      }
+    }
     if (hasError) return false;
+
+    const cuitDigits = onlyDigits(cuitRaw);
+    const cuit = cuitDigits.length === 11 ? formatCuit(cuitDigits) : '';
 
     if (editingClientId) {
       const c = clients.find(x => x.id === editingClientId);
-      if (c) Object.assign(c, { name, email, phone, address, financialData, riskProfile, comments });
+      if (c) Object.assign(c, { name, cuit, email, phone, address, financialData, riskProfile, comments });
     } else {
       const id = clients.length ? Math.max(...clients.map(x => x.id)) + 1 : 1;
-      clients.push({ id, name, email, phone, address, financialData, riskProfile, comments });
+      clients.push({ id, name, cuit, email, phone, address, financialData, riskProfile, comments });
     }
     return true;
   }
@@ -228,12 +270,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Submit formulario (usar submit del form, no el click del botón)
+  // Submit formulario
   clientForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     const ok = upsertFromForm();
     if (!ok) return;
-    renderClientsList();
+    applyFilterAndRender();
     clientForm.reset();
     closeClientModal();
   });
@@ -242,17 +284,19 @@ document.addEventListener('DOMContentLoaded', function () {
   confirmBtn?.addEventListener('click', () => {
     if (pendingDeleteId != null) {
       deleteClient(pendingDeleteId);
-      renderClientsList();
+     applyFilterAndRender();
     }
     closeConfirmDelete();
   });
-  cancelConfirmBtn?.addEventListener('click', closeConfirmDelete);
-  confirmModal?.addEventListener('click', (e) => { if (e.target === confirmModal) closeConfirmDelete(); });
+
+  // Búsqueda en vivo
+  searchInput?.addEventListener('input', applyFilterAndRender);
 
   // Datos demo opcionales
   clients = [
-    { id: 1, name: 'Juancito Pérez', email: 'juan@example.com', phone: '+54 9 11 1234-5678', riskProfile: 'Moderado' },
-    { id: 2, name: 'Ana Gómez', email: 'ana@example.com', phone: '+54 9 11 9876-5432', riskProfile: 'Bajo' }
+    { id: 1, name: 'Juancito Pérez', cuit: '20-12345678-3', email: 'juan@example.com', phone: '+54 9 11 1234-5678', riskProfile: 'Moderado' },
+    { id: 2, name: 'Ana Gómez', cuit: '27-00000000-5', email: 'ana@example.com', phone: '+54 9 11 9876-5432', riskProfile: 'Bajo' }
   ];
-  renderClientsList();
+  applyFilterAndRender();
 });
+

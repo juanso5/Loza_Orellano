@@ -26,6 +26,12 @@ body {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .search-bar input {
     flex: 1;
     padding: 1%;
@@ -35,17 +41,22 @@ body {
     font-size: 1rem;
 }
 
-.search-bar button {
-    padding: 1%;
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: background-color 0.3s ease;
+.search-bar .btn-search {
+  padding: 10px 14px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s ease;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
 }
-
+.search-bar .btn-search:hover {
+    background-color: #0056b3;
+}
 .search-bar button:hover {
     background-color: #0056b3;
 }
@@ -56,20 +67,22 @@ body {
     text-align: right;
 }
 
-.add-client button {
-    padding: 1%;
-    background-color: #28a745;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: background-color 0.3s ease;
-}
 
-.add-client button:hover {
-    background-color: #218838;
+/* Estilo global para .btn-add (igual Home) */
+.btn-add {
+  background: var(--accent, #0f6cff);
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  box-shadow: 0 8px 22px rgba(15,108,255,0.12);
+  transition: filter 0.2s ease;
 }
+.btn-add:hover { filter: brightness(.95); }
 
 /* Clients Section */
 .clients-section {
@@ -278,9 +291,9 @@ body {
 #client-form input,
 #client-form select,
 #client-form textarea {
-  width: 70%;
+  width: 78%;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 2%;
   background: #fbfdff;
   padding: 10px 12px;
   font-size: .98rem;
@@ -375,7 +388,7 @@ body {
 .modal { display: none; align-items: center; justify-content: center; position: fixed; inset: 0; z-index: 2000; background: rgba(6,9,14,.45); padding: 24px; }
 .modal.active { display: flex; }
 
-/* Confirm delete usa aria-hidden como en Home */
+/* Confirm delete */
 #confirm-delete-modal { display: none; }
 #confirm-delete-modal[aria-hidden="false"] { display: flex; }
 
@@ -408,7 +421,8 @@ body {
 }
 .client-name { margin:0 0 6px 0; font-size:1rem; color:#0f172a; }
 .client-meta { display:flex; gap:10px; color:#475569; font-size:.92rem; flex-wrap:wrap; }
-/* === Acciones iguales a Home (icon button) === */
+
+
 .client-actions .edit-btn,
 .client-actions .delete-btn {
   /* override estilos previos */
@@ -444,3 +458,34 @@ body {
 }
 
 #confirm-delete-modal.active { display: flex; }
+
+
+.btn-save {
+  background: var(--accent, #0f6cff);
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-save:hover { filter: brightness(.95); }
+
+.btn-close {
+  background: transparent;
+  border: 1px solid #e6edf3;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
