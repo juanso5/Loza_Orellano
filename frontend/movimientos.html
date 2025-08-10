@@ -7,6 +7,8 @@
 
   <!-- Estilos -->
   <link rel="stylesheet" href="styles/movimientos.css">
+  <!-- --- SIDEBAR FIX ---: ensure sidebar styles available -->
+  <link rel="stylesheet" href="styles/sidebar.css">
 
   <!-- Font Awesome (iconos) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -22,6 +24,16 @@
         <h1>Movimientos</h1>
       </div>
       <div class="page-right">
+        <!-- --- CSV FIX ---: boton para cargar CSV de precios -->
+        <button id="csvUploadBtn" class="btn secondary" title="Cargar precios CSV"><i class="fas fa-file-csv"></i> Cargar precios CSV</button>
+        <input id="csvFileInput" type="file" accept=".csv" style="display:none" />
+
+        <!-- CSV status display + clear -->
+        <div id="csvStatus" class="csv-status" aria-live="polite" style="display:inline-flex; align-items:center; gap:8px; margin-left:8px;">
+          <small id="csvStatusText">No hay precios cargados</small>
+          <button id="clearCsvBtn" class="btn" title="Quitar precios cargados" style="display:none">Limpiar</button>
+        </div>
+
         <input id="searchInput" class="search-input" placeholder="Buscar por cliente, especie o cartera..." />
         <button id="openAddBtn" class="btn primary"><i class="fas fa-plus"></i> Agregar Movimiento</button>
       </div>
@@ -138,8 +150,8 @@
           </div>
 
           <div class="modal-footer">
-            <button type="button" class="btn" id="movementCancelBtn">Cancelar</button>
             <button type="button" class="btn save-btn" id="movementSaveBtn">Guardar</button>
+            <button type="button" class="btn" id="movementCancelBtn">Cancelar</button>
           </div>
         </form>
       </div>
@@ -175,8 +187,8 @@
           <p id="confirmMessage">¿Confirmar?</p>
         </div>
         <div class="modal-footer">
-          <button class="btn" id="confirmCancelBtn">Cancelar</button>
           <button class="btn primary" id="confirmOkBtn">Confirmar</button>
+          <button class="btn" id="confirmCancelBtn">Cancelar</button>
         </div>
       </div>
     </div>
@@ -184,5 +196,7 @@
 
   <!-- Script -->
   <script src="components/movimientos.js"></script>
+  <!-- --- CSV FIX ---: parser y actualizador de precios -->
+  <script src="components/movimientos_prices.js"></script>
 </body>
 </html>
