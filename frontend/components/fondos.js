@@ -1,8 +1,9 @@
 /**
- * components/fondos.js — implementación completa
- * - gestión de clientes, carteras, fondos y movimientos
- * - modales: movimiento, confirm delete, detalle cartera, historial de especie
- * - persistencia simple con localStorage (LS key: 'fondos_app_v2')
+ * components/fondos.js — Version final con:
+ * - Validación de venta (no retirar más de lo disponible)
+ * - Un único botón "Agregar cartera" inline junto a las carteras
+ * - Modal movimiento: selección de especie (existente o nueva)
+ * - Historial por especie, detalle de cartera editable
  */
 
 (function () {
@@ -21,10 +22,6 @@
     carterasGrid: document.getElementById('carteras-grid'),
     movementsTableBody: document.querySelector('#movements-table tbody'),
 
-    // client internal filter
-    clientFundSearch: document.getElementById('client-fund-search'),
-    clientFundSuggestions: document.getElementById('client-fund-suggestions'),
-
     // movement modal
     btnNewMov: document.getElementById('btn-new-mov'),
     movementModal: document.getElementById('movement-modal'),
@@ -38,6 +35,8 @@
     movFecha: document.getElementById('mov-fecha'),
     saveMovement: document.getElementById('save-movement'),
     cancelMovement: document.getElementById('cancel-movement'),
+    movAvailable: document.getElementById('mov-available'),
+    movMontoError: document.getElementById('mov-monto-error'),
 
     // confirm delete
     confirmDeleteModal: document.getElementById('confirm-delete-modal'),
@@ -45,6 +44,15 @@
     confirmDeleteYes: document.getElementById('confirm-delete-yes'),
     confirmDeleteNo: document.getElementById('confirm-delete-no'),
     confirmDeleteClose: document.getElementById('confirm-delete-close'),
+
+    // add portfolio inline button (UNICO)
+    btnAddPortfolioInline: document.getElementById('btn-add-portfolio-inline'),
+    addPortfolioModal: document.getElementById('add-portfolio-modal'),
+    addPortfolioClose: document.getElementById('add-portfolio-close'),
+    addPortfolioName: document.getElementById('add-portfolio-name'),
+    addPortfolioPeriod: document.getElementById('add-portfolio-period'),
+    addPortfolioSave: document.getElementById('add-portfolio-save'),
+    addPortfolioCancel: document.getElementById('add-portfolio-cancel'),
 
     // portfolio modal
     portfolioModal: document.getElementById('portfolio-modal'),
@@ -130,11 +138,6 @@
     el.clientName.textContent = client.name;
     el.clientMeta.textContent = client.description || '';
     el.clientTotal.textContent = money(totalClient(client));
-
-    // clear internal fund search
-    if (el.clientFundSearch) el.clientFundSearch.value = '';
-    if (el.clientFundSuggestions) el.clientFundSuggestions.setAttribute('aria-hidden', 'true');
-
     renderCarteras(client);
     renderMovements(client);
   }
@@ -143,7 +146,7 @@
     return client.portfolios.reduce((acc, p) => acc + p.funds.reduce((s, f) => s + (f.nominal || 0), 0), 0);
   }
 
-  // ---------- render carteras (accepts optional fundFilter) ----------
+  // ---------- render carteras ----------
   function renderCarteras(client, fundFilter = '') {
     el.carterasGrid.innerHTML = '';
     const q = (fundFilter || '').trim().toLowerCase();
@@ -166,7 +169,6 @@
       card.dataset.portfolioId = p.id;
       card.dataset.clientId = client.id;
 
-      // Build inner HTML
       let inner = `
         <div class="cartera-top">
           <div>
@@ -182,21 +184,6 @@
         </div>
       `;
 
-      // If there is a filter show matched species & nominales
-      if (q) {
-        const matches = p.funds.filter(f => (f.name || '').toLowerCase().includes(q));
-        if (matches.length > 0) {
-          inner += `<div class="matched-funds" style="margin-top:8px;"><div class="muted" style="margin-bottom:6px;">Especies encontradas en esta cartera:</div><ul class="fund-match-list" style="margin:0; padding:0; list-style:none;">`;
-          for (const f of matches) {
-            inner += `<li style="padding:6px 0; display:flex; justify-content:space-between; gap:12px; border-top:1px solid rgba(0,0,0,0.03);">
-                        <span style="font-weight:600;">${f.name}</span>
-                        <span class="muted">${formatNumber(f.nominal)} unidades</span>
-                      </li>`;
-          }
-          inner += `</ul></div>`;
-        }
-      }
-
       // Progress
       inner += `<div class="period" style="margin-top:8px;"><div class="muted">Progreso periodo</div>
                   <div class="progress-wrap"><div class="progress-bar" style="width:${Math.min(100, Math.round((p.progress || 0) * 100))}%"></div></div>
@@ -207,7 +194,7 @@
     }
   }
 
-  // ---------- render movements (accepts optional fundFilter to filter rows) ----------
+  // ---------- render movements ----------
   function renderMovements(client, fundFilter = '') {
     el.movementsTableBody.innerHTML = '';
     const q = (fundFilter || '').trim().toLowerCase();
@@ -255,11 +242,14 @@
     populateCarterasInModal();
     el.movType.value = 'compra';
     el.movFondoNew.value = '';
-    if (el.movFondoNew) el.movFondoNew.style.display = 'none';
+    el.movFondoNew.style.display = 'none';
     el.movMonto.value = '';
+    el.movAvailable.textContent = '';
+    el.movMontoError.style.display = 'none';
     el.movFecha.value = (new Date()).toISOString().split('T')[0];
     showModal(el.movementModal, el.movFondoSelect);
   }
+
   function populateCarterasInModal() {
     const clientId = el.movClient.value;
     const client = state.clients.find(x => x.id === clientId);
@@ -269,11 +259,12 @@
       const opt = document.createElement('option'); opt.value = p.id; opt.textContent = p.name;
       el.movCartera.appendChild(opt);
     }
-    // populate species for first portfolio
     populateSpeciesForSelectedPortfolio();
   }
+
   function populateSpeciesForSelectedPortfolio() {
     el.movFondoSelect.innerHTML = '';
+    el.movFondoNew.style.display = 'none';
     const clientId = el.movClient.value;
     const carteraId = el.movCartera.value;
     const client = state.clients.find(c => c.id === clientId);
@@ -282,10 +273,10 @@
     if (!portfolio) {
       const emptyOpt = document.createElement('option'); emptyOpt.value = ''; emptyOpt.textContent = 'Seleccioná cartera primero';
       el.movFondoSelect.appendChild(emptyOpt);
+      el.movAvailable.textContent = '';
       return;
     }
 
-    // species existing
     for (const f of portfolio.funds) {
       const o = document.createElement('option');
       o.value = f.name;
@@ -293,15 +284,72 @@
       el.movFondoSelect.appendChild(o);
     }
 
-    // option to add new species
     const sep = document.createElement('option');
     sep.value = '__new__';
     sep.textContent = '➕ Agregar nueva especie...';
     el.movFondoSelect.appendChild(sep);
 
-    if (el.movFondoNew) el.movFondoNew.style.display = 'none';
     el.movFondoSelect.selectedIndex = 0;
+    updateAvailableForModal();
   }
+
+  // retorna unidades disponibles para venta de la especie en cartera
+  function getAvailableUnits(clientId, portfolioId, fundName) {
+    const client = state.clients.find(c => c.id === clientId);
+    if (!client) return 0;
+    const p = client.portfolios.find(x => x.id === portfolioId);
+    if (!p) return 0;
+    const f = p.funds.find(x => (x.name || '').toLowerCase() === (fundName || '').toLowerCase());
+    return f ? (f.nominal || 0) : 0;
+  }
+
+  function updateAvailableForModal() {
+    el.movAvailable.textContent = '';
+    el.movMontoError.style.display = 'none';
+    el.saveMovement.disabled = false;
+
+    const type = el.movType.value;
+    const clientId = el.movClient.value;
+    const carteraId = el.movCartera.value;
+    const selected = el.movFondoSelect.value;
+    if (!clientId || !carteraId || !selected) { el.movAvailable.textContent = ''; return; }
+
+    if (selected === '__new__') {
+      el.movFondoNew.style.display = 'block';
+      el.movFondoNew.value = '';
+      if (type === 'venta') {
+        // cannot sell a new species
+        el.movAvailable.textContent = 'No es posible vender: la especie no existe en esta cartera.';
+        el.movMontoError.style.display = 'block';
+        el.movMontoError.textContent = 'Venta no permitida: seleccioná una especie existente o cambiá a Compra.';
+        el.saveMovement.disabled = true;
+      } else {
+        el.movAvailable.textContent = 'Vas a crear una nueva especie en la cartera al guardar (compra).';
+      }
+    } else {
+      el.movFondoNew.style.display = 'none';
+      const available = getAvailableUnits(clientId, carteraId, selected);
+      if (type === 'venta') {
+        el.movAvailable.textContent = `Disponibles: ${formatNumber(available)} unidades.`;
+        // set max attribute to help UX
+        el.movMonto.max = available;
+        // if current value > available, show error
+        const cur = parseFloat(el.movMonto.value || '0');
+        if (cur > available) {
+          el.movMontoError.style.display = 'block';
+          el.movMontoError.textContent = `No podés vender más de ${formatNumber(available)} unidades.`;
+          el.saveMovement.disabled = true;
+        } else {
+          el.movMontoError.style.display = 'none';
+          el.saveMovement.disabled = false;
+        }
+      } else {
+        el.movAvailable.textContent = `Existentes: ${formatNumber(available)} u. — seleccionar para comprar o agregar nueva especie.`;
+        el.movMonto.max = '';
+      }
+    }
+  }
+
   function saveMovementFromModal() {
     const clientId = el.movClient ? el.movClient.value : null;
     const client = state.clients.find(x => x.id === clientId);
@@ -310,7 +358,6 @@
     const carteraId = el.movCartera ? el.movCartera.value : null;
     const portfolio = client.portfolios.find(p => p.id === carteraId);
 
-    // determine final fund name (selected or new)
     let fondo = '';
     if (el.movFondoSelect) {
       if (el.movFondoSelect.value === '__new__') {
@@ -330,20 +377,15 @@
       return;
     }
 
-    // Validation for sale: cannot sell more than nominal
+    // validation for venta
     if (type === 'venta') {
-      const fundObj = portfolio.funds.find(f => (f.name || '').toLowerCase() === fondo.toLowerCase());
-      if (!fundObj) {
-        alert('No podés vender una especie que no existe en la cartera seleccionada.');
-        return;
-      }
-      if (monto > (fundObj.nominal || 0)) {
-        alert(`No podés retirar más de lo que hay. Disponibles: ${formatNumber(fundObj.nominal)} unidades.`);
+      const available = getAvailableUnits(clientId, carteraId, fondo);
+      if (monto > available) {
+        alert(`No podés retirar más de lo que hay. Disponibles: ${formatNumber(available)} unidades.`);
         return;
       }
     }
 
-    // create movement and update nominal
     const movement = { id: uid('m'), date: fecha, type, fund: fondo, portfolio: portfolio.name, amount: monto };
     client.movements.push(movement);
 
@@ -354,13 +396,12 @@
     }
 
     fundObj.nominal = (fundObj.nominal || 0) + (type === 'compra' ? monto : -monto);
-
     if ((fundObj.nominal || 0) <= 0) portfolio.funds = portfolio.funds.filter(ff => (ff.nominal || 0) > 0);
 
     saveToLS();
     if (state.selectedClientId === clientId) {
-      renderCarteras(client, el.clientFundSearch.value || '');
-      renderMovements(client, el.clientFundSearch.value || '');
+      renderCarteras(client);
+      renderMovements(client);
       el.clientTotal.textContent = money(totalClient(client));
     }
     renderClients(el.clientSearch.value || '');
@@ -401,6 +442,37 @@
     for (const p of client.portfolios) p.funds = p.funds.filter(f => (f.nominal || 0) > 0);
   }
 
+  // ---------- add portfolio modal ----------
+  function openAddPortfolioModal() {
+    if (!state.selectedClientId) {
+      alert('Seleccioná un cliente antes de crear una cartera.');
+      return;
+    }
+    el.addPortfolioName.value = '';
+    el.addPortfolioPeriod.value = '12';
+    showModal(el.addPortfolioModal, el.addPortfolioName);
+  }
+  function saveAddPortfolio() {
+    const name = (el.addPortfolioName.value || '').trim();
+    const period = parseInt(el.addPortfolioPeriod.value, 10) || 12;
+    if (!name) { alert('Nombre de cartera requerido'); return; }
+    const client = state.clients.find(c => c.id === state.selectedClientId);
+    if (!client) { alert('Cliente inválido'); hideModal(el.addPortfolioModal); return; }
+
+    const newPortfolio = {
+      id: uid('p'),
+      name,
+      periodMonths: period,
+      progress: 0,
+      funds: []
+    };
+    client.portfolios.push(newPortfolio);
+    saveToLS();
+    renderCarteras(client);
+    renderClients(el.clientSearch.value || '');
+    hideModal(el.addPortfolioModal);
+  }
+
   // ---------- portfolio detail modal ----------
   function openPortfolioModal(clientId, portfolioId) {
     const client = state.clients.find(c => c.id === clientId);
@@ -439,7 +511,7 @@
       el.portfolioFundsTableBody.appendChild(tr);
     }
 
-    // attach click listeners to fund-name cells for history
+    // click on species -> open history
     el.portfolioFundsTableBody.querySelectorAll('.fund-name-link').forEach(td => {
       td.addEventListener('click', (e) => {
         const fundName = td.dataset.fundName;
@@ -477,8 +549,8 @@
     if (changed) {
       saveToLS();
       if (state.selectedClientId === client.id) {
-        renderCarteras(client, el.clientFundSearch.value || '');
-        renderMovements(client, el.clientFundSearch.value || '');
+        renderCarteras(client);
+        renderMovements(client);
         el.clientTotal.textContent = money(totalClient(client));
       }
       renderPortfolioFundsTable(portfolio, el.portfolioFundFilter.value || '');
@@ -522,32 +594,36 @@
     searchTimer = setTimeout(() => renderClients(e.target.value || ''), 180);
   });
 
-  let clientFilterTimer = null;
-  if (el.clientFundSearch) {
-    el.clientFundSearch.addEventListener('input', (e) => {
-      clearTimeout(clientFilterTimer);
-      clientFilterTimer = setTimeout(() => {
-        const q = e.target.value || '';
-        const client = state.clients.find(c => c.id === state.selectedClientId);
-        if (!client) return;
-        renderCarteras(client, q);
-        renderMovements(client, q);
-        if (el.clientFundSuggestions) renderSpeciesSuggestions(q);
-      }, 180);
-    });
-  }
-
   // movement modal wiring
   el.btnNewMov && el.btnNewMov.addEventListener('click', openMovementModal);
   el.moveModalClose && el.moveModalClose.addEventListener('click', () => hideModal(el.movementModal));
   el.saveMovement && el.saveMovement.addEventListener('click', saveMovementFromModal);
   el.cancelMovement && el.cancelMovement.addEventListener('click', () => hideModal(el.movementModal));
-  el.movClient && el.movClient.addEventListener('change', populateCarterasInModal);
-  el.movCartera && el.movCartera.addEventListener('change', populateSpeciesForSelectedPortfolio);
-  el.movFondoSelect && el.movFondoSelect.addEventListener('change', (e) => {
-    if (!el.movFondoNew) return;
-    if (e.target.value === '__new__') { el.movFondoNew.style.display = 'block'; el.movFondoNew.focus(); }
-    else el.movFondoNew.style.display = 'none';
+  el.movClient && el.movClient.addEventListener('change', () => { populateCarterasInModal(); updateAvailableForModal(); });
+  el.movCartera && el.movCartera.addEventListener('change', () => { populateSpeciesForSelectedPortfolio(); updateAvailableForModal(); });
+  el.movFondoSelect && el.movFondoSelect.addEventListener('change', () => { updateAvailableForModal(); });
+  el.movType && el.movType.addEventListener('change', () => { updateAvailableForModal(); });
+
+  // validate monto on input
+  el.movMonto && el.movMonto.addEventListener('input', () => {
+    const val = parseFloat(el.movMonto.value || '0');
+    const clientId = el.movClient.value;
+    const carteraId = el.movCartera.value;
+    const selected = el.movFondoSelect.value === '__new__' ? (el.movFondoNew.value || '').trim() : el.movFondoSelect.value;
+    if (el.movType.value === 'venta') {
+      const available = getAvailableUnits(clientId, carteraId, selected);
+      if (val > available) {
+        el.movMontoError.style.display = 'block';
+        el.movMontoError.textContent = `No podés vender más de ${formatNumber(available)} unidades.`;
+        el.saveMovement.disabled = true;
+      } else {
+        el.movMontoError.style.display = 'none';
+        el.saveMovement.disabled = false;
+      }
+    } else {
+      el.movMontoError.style.display = 'none';
+      el.saveMovement.disabled = false;
+    }
   });
 
   // delete movement delegation
@@ -564,7 +640,13 @@
   el.confirmDeleteNo && el.confirmDeleteNo.addEventListener('click', () => { state.pendingDeleteId = null; hideModal(el.confirmDeleteModal); });
   el.confirmDeleteClose && el.confirmDeleteClose.addEventListener('click', () => { state.pendingDeleteId = null; hideModal(el.confirmDeleteModal); });
 
-  // portfolio modal open via delegation on cartera-card
+  // add portfolio wiring (single inline button)
+  el.btnAddPortfolioInline && el.btnAddPortfolioInline.addEventListener('click', openAddPortfolioModal);
+  el.addPortfolioClose && el.addPortfolioClose.addEventListener('click', () => hideModal(el.addPortfolioModal));
+  el.addPortfolioCancel && el.addPortfolioCancel.addEventListener('click', () => hideModal(el.addPortfolioModal));
+  el.addPortfolioSave && el.addPortfolioSave.addEventListener('click', saveAddPortfolio);
+
+  // portfolio modal delegation (open detail)
   el.carterasGrid && el.carterasGrid.addEventListener('click', (e) => {
     const card = e.target.closest('.cartera-card');
     if (!card) return;
@@ -587,7 +669,7 @@
     renderPortfolioFundsTable(portfolio, e.target.value || '');
   });
 
-  // species history modal close
+  // species history close
   el.speciesHistoryClose && el.speciesHistoryClose.addEventListener('click', () => hideModal(el.speciesHistoryModal));
   el.speciesHistoryCloseBtn && el.speciesHistoryCloseBtn.addEventListener('click', () => hideModal(el.speciesHistoryModal));
 
@@ -596,6 +678,7 @@
     if (e.target === el.movementModal) hideModal(el.movementModal);
     if (e.target === el.confirmDeleteModal) hideModal(el.confirmDeleteModal);
     if (e.target === el.portfolioModal) hideModal(el.portfolioModal);
+    if (e.target === el.addPortfolioModal) hideModal(el.addPortfolioModal);
     if (e.target === el.speciesHistoryModal) hideModal(el.speciesHistoryModal);
   });
   window.addEventListener('keydown', (e) => {
@@ -603,54 +686,15 @@
       if (el.movementModal && el.movementModal.getAttribute('aria-hidden') === 'false') hideModal(el.movementModal);
       if (el.confirmDeleteModal && el.confirmDeleteModal.getAttribute('aria-hidden') === 'false') hideModal(el.confirmDeleteModal);
       if (el.portfolioModal && el.portfolioModal.getAttribute('aria-hidden') === 'false') hideModal(el.portfolioModal);
+      if (el.addPortfolioModal && el.addPortfolioModal.getAttribute('aria-hidden') === 'false') hideModal(el.addPortfolioModal);
       if (el.speciesHistoryModal && el.speciesHistoryModal.getAttribute('aria-hidden') === 'false') hideModal(el.speciesHistoryModal);
     }
   });
-
-  // ---------- Autocomplete helpers (species suggestions) ----------
-  function getSpeciesListForClient(clientId) {
-    const client = state.clients.find(c => c.id === clientId);
-    const s = new Set();
-    if (client) {
-      for (const p of client.portfolios) for (const f of p.funds) s.add((f.name || '').trim());
-    } else {
-      for (const c of state.clients) for (const p of c.portfolios) for (const f of p.funds) s.add((f.name || '').trim());
-    }
-    return Array.from(s).filter(Boolean).sort((a,b) => a.localeCompare(b));
-  }
-  function renderSpeciesSuggestions(q = '') {
-    const dd = el.clientFundSuggestions;
-    if (!dd) return;
-    const clientId = state.selectedClientId;
-    const list = getSpeciesListForClient(clientId);
-    const qLow = (q || '').trim().toLowerCase();
-    const matches = qLow ? list.filter(s => s.toLowerCase().includes(qLow)) : list.slice(0, 30);
-    dd.innerHTML = '';
-    if (matches.length === 0) { dd.setAttribute('aria-hidden', 'true'); return; }
-    for (const s of matches) {
-      const item = document.createElement('div'); item.className = 'suggestion-item'; item.textContent = s;
-      item.addEventListener('click', () => {
-        if (!el.clientFundSearch) return;
-        el.clientFundSearch.value = s;
-        dd.setAttribute('aria-hidden', 'true');
-        const client = state.clients.find(c => c.id === state.selectedClientId);
-        if (client) { renderCarteras(client, s); renderMovements(client, s); }
-      });
-      dd.appendChild(item);
-    }
-    dd.setAttribute('aria-hidden', 'false');
-  }
 
   // ---------- init ----------
   function init() {
     renderClients();
     if (state.clients.length) selectClient(state.clients[0].id);
-
-    // wire up event delegation for delete buttons newly created
-    // handled earlier by delegating on table body
-
-    // preload species suggestions if the UI exists
-    if (el.clientFundSuggestions) renderSpeciesSuggestions('');
   }
   init();
 

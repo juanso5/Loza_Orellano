@@ -118,7 +118,7 @@ body{
 }
 .tasks-row::-webkit-scrollbar { height: 8px; }
 .tasks-row::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); border-radius: 6px; }
-.tasks-row > .card { flex: 0 0 46%; min-width: 280px; max-width: 560px; scroll-snap-align: center; display:flex; flex-direction:column; border-radius:10px; }
+.tasks-row > .card { flex: 0 0 46%; min-width: 49%; max-width: 50%; scroll-snap-align: center; display:flex; flex-direction:column; border-radius:10px; }
 
 /* card internal limits */
 .tasks-card {
