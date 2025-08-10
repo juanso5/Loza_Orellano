@@ -25,13 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const pendingContainer = document.getElementById('pending-tasks');
   const calendarEl = document.getElementById('calendar');
 
-  const toggleMoreBtn = document.getElementById('toggle-more-pending');
-
   // state
   let tasks = []; // each: { id, title, description, date, priority, completed, eventId }
   let editingTaskId = null;
   let suppressEventAdd = false;
-  const PENDING_SHOWN = 3; // show 3 items, then "ver más"
 
   const PRIORITY_CONFIG = { alta:{color:'#e74c3c'}, media:{color:'#f39c12'}, baja:{color:'#27ae60'} };
 
@@ -172,8 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Render lists (today / pending with "ver más")
-  let pendingExpanded = false;
+  // Render lists (today / pending)
   function renderTaskLists() {
     const todayStr = (new Date()).toISOString().split('T')[0];
     if (todayContainer) todayContainer.innerHTML='';
@@ -192,20 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // render today
     todayTasks.forEach(t => { if (todayContainer) todayContainer.appendChild(createTaskElement(t)); });
 
-    // pending: apply "show first N" behavior
-    const toShow = pendingExpanded ? pendingTasks : pendingTasks.slice(0, PENDING_SHOWN);
-    toShow.forEach(t => { if (pendingContainer) pendingContainer.appendChild(createTaskElement(t)); });
-
-    // toggle button visibility / text
-    const toggleBtn = document.getElementById('toggle-more-pending');
-    if (!toggleBtn) return;
-    if (pendingTasks.length <= PENDING_SHOWN) {
-      toggleBtn.style.display = 'none';
-    } else {
-      toggleBtn.style.display = 'block';
-      toggleBtn.textContent = pendingExpanded ? 'Ver menos' : `Ver más (${pendingTasks.length - PENDING_SHOWN})`;
-    }
-
+    pendingTasks.forEach(t => { if (pendingContainer) pendingContainer.appendChild(createTaskElement(t)); });
     // init carousel (buttons) after content updates
     initTaskCarousel();
   }
@@ -284,6 +267,14 @@ document.addEventListener('DOMContentLoaded', () => {
       { title: 'Revisar cartera de María González', description: 'Actualizar distribución según perfil', date: today, priority:'alta' },
       { title: 'Preparar informe trimestral', description: 'Comparativa con benchmark', date: today, priority:'media' },
       { title: 'Contactar nuevo fondo', description: 'Solicitar prospectos', date: today, priority:'baja' },
+      { title: 'Contactar nuevo fondo', description: 'Solicitar prospectos', date: today, priority:'baja' },
+      { title: 'Contactar nuevo fondo', description: 'Solicitar prospectos', date: today, priority:'baja' },
+      { title: 'Contactar nuevo fondo', description: 'Solicitar prospectos', date: today, priority:'baja' },
+      { title: 'Reunión equipo comercial', description: 'Estrategias Q3', date: later, priority:'media' },
+      { title: 'Reunión equipo comercial', description: 'Estrategias Q3', date: later, priority:'media' },
+      { title: 'Reunión equipo comercial', description: 'Estrategias Q3', date: later, priority:'media' },
+      { title: 'Reunión equipo comercial', description: 'Estrategias Q3', date: later, priority:'media' },
+      { title: 'Reunión equipo comercial', description: 'Estrategias Q3', date: later, priority:'media' },
       { title: 'Reunión equipo comercial', description: 'Estrategias Q3', date: later, priority:'media' },
       { title: 'Actualizar documentación', description: 'Verificar cumplimiento', date: later, priority:'alta' }
     ];
@@ -305,13 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTaskLists();
   })();
 
-  // Toggle "ver más" (defensivo)
-  if (toggleMoreBtn) {
-    toggleMoreBtn.addEventListener('click', () => {
-      pendingExpanded = !pendingExpanded;
-      renderTaskLists(); // muestra todo de golpe cuando pendingExpanded=true
-    });
-  }
 
   // --------------------------
   // CAROUSEL CONTROLS

@@ -114,29 +114,42 @@ body{
   -webkit-overflow-scrolling: touch;
   position: relative;
   margin-bottom: 18px;
+  align-items: stretch;
 }
 .tasks-row::-webkit-scrollbar { height: 8px; }
 .tasks-row::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); border-radius: 6px; }
 .tasks-row > .card { flex: 0 0 46%; min-width: 280px; max-width: 560px; scroll-snap-align: center; display:flex; flex-direction:column; border-radius:10px; }
 
 /* card internal limits */
-.tasks-card { max-height: 320px; display:flex; flex-direction:column; overflow:hidden; }
-.tasks-card .card-body { padding: 8px 10px; overflow-y: auto; flex: 1 1 auto; }
+.tasks-card {
+  height: clamp(300px, 40vh, 480px);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+.tasks-card .card-body {
+  padding:8px 10px;
+  overflow-y:auto;          /* scroll interno por lista */
+  overscroll-behavior:contain;
+  flex:1 1 auto;
+}
 
 /* list and items */
-.task-list { display:flex; flex-direction:column; gap: 6px; min-height: 40px; }
+.task-list { 
+  display:flex; flex-direction:column; gap:6px; min-height:40px;
+  padding-bottom:6px;       /* evita que el último item toque el borde/footers */
+}
 .task-item {
-  display:flex;
-  gap:10px;
-  align-items:center;
-  justify-content:space-between;
-  padding:6px 8px; /* más compacto */
+  display:flex; gap:10px; align-items:center; justify-content:space-between;
+  position: relative;
+  padding:6px 8px;
   border-radius:8px;
   background: linear-gradient(180deg,#ffffff,#fbfdff);
   border-left:4px solid transparent;
-  box-shadow: 0 1px 6px rgba(16,24,40,0.04);
+  box-shadow:0 1px 6px rgba(16,24,40,0.04);
   transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
-  min-height:40px;
+  min-height:25%;
 }
 .task-item:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(16,24,40,0.06); }
 
@@ -221,10 +234,24 @@ body{
 .modal { display:none; position:fixed; inset:0; background: rgba(6,9,14,0.45); z-index:2200; align-items:center; justify-content:center; padding:28px; }
 .modal[aria-hidden="false"] { display:flex; }
 .modal-dialog { width:480px; max-width:100%; background:var(--card); border-radius:12px; overflow:hidden; box-shadow: 0 20px 60px rgba(11,22,40,0.20); display:flex; flex-direction:column; }
-.modal-header { padding:18px; border-bottom:1px solid #eef2f6; }
+.modal-header { padding:3%; border-bottom:1px solid #eef2f6; }
 .modal-body { padding:16px; display:flex; flex-direction:column; gap:10px; }
 .modal-body input, .modal-body textarea, .modal-body select { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf3; font-size:0.95rem; }
 .modal-footer { padding:12px 18px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eef2f6; }
 .btn-save { background: var(--accent); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
 .btn-close { background:transparent; border:1px solid #e6edf3; padding:10px 12px; border-radius:8px; cursor:pointer; }
 .btn-danger { background: var(--danger); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+
+/* Separación entre header y lista de tareas */
+.tasks-card .card-header {
+  padding: 12px 14px 6px;  
+}
+.tasks-card .card-header h3 {
+  margin: 0;
+}
+.tasks-card .card-body {
+  margin-top: 8px;            /* gap visual debajo del título */
+  padding-top: 10px;          /* respiro interno */
+  border-top: 1px solid #eef2f6;  /* línea divisoria sutil */
+}
+

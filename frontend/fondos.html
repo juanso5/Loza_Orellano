@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fondos - Clientes</title>
+
+  <!-- Font & Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Sidebar and page styles -->
+  <link rel="stylesheet" href="styles/sidebar.css">
+  <link rel="stylesheet" href="styles/fondos.css">
+</head>
+<body>
+  <!-- Sidebar loader -->
+  <div id="sidebar-container"></div>
+
+  <!-- Main content area -->
+  <div class="main-content" id="main-content">
+    <div class="main-inner">
+      <header class="top-header">
+        <div class="top-row">
+          <div class="header-title">
+            <h1>Fondos por Cliente</h1>
+            <p class="muted">Visualización de carteras, rendimientos y movimientos por cliente</p>
+          </div>
+
+          <div class="top-controls">
+            <button id="btn-new-mov" class="btn-add">
+              <i class="fas fa-plus-circle"></i> Nuevo Movimiento
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="fondos-layout">
+        <!-- LEFT: clients + search -->
+        <aside class="clients-column card">
+          <div class="card-header">
+            <div class="search-wrapper">
+              <i class="fas fa-search search-icon"></i>
+              <input id="client-search" class="search-input" placeholder="Buscar cliente o especie..." aria-label="Buscar cliente o especie">
+            </div>
+
+            <!-- internal species search (cuando un cliente está seleccionado) -->
+            <div style="margin-top:10px;">
+              <input id="client-fund-search" class="search-input" placeholder="Buscar especie (filtra carteras y movimientos)" aria-label="Buscar especie (filtra carteras y movimientos)">
+              <div id="client-fund-suggestions" class="suggestions" aria-hidden="true"></div>
+            </div>
+          </div>
+
+          <div id="clients-list" class="clients-list card-body" aria-live="polite"></div>
+        </aside>
+
+        <!-- RIGHT: client detail -->
+        <section class="client-detail card" aria-live="polite">
+          <div id="client-placeholder" class="client-placeholder">
+            <div class="placeholder-content">
+              <i class="fas fa-user-circle" style="font-size:48px; color:#c7d2da"></i>
+              <p>Seleccioná un cliente para ver sus carteras y movimientos</p>
+            </div>
+          </div>
+
+          <div id="client-panel" class="client-panel" style="display:none;">
+            <div class="client-header">
+              <div>
+                <h2 id="client-name"><i class="fas fa-user"></i> Cliente</h2>
+                <div id="client-meta" class="client-meta muted">Resumen del cliente</div>
+              </div>
+              <div class="client-summary">
+                <div class="summary-item muted">Patrimonio total</div>
+                <div id="client-total" class="big-number">$0</div>
+              </div>
+            </div>
+
+            <h3 class="section-title">Carteras</h3>
+            <div id="carteras-grid" class="carteras-grid" aria-label="Carteras del cliente"></div>
+
+            <h3 class="section-title">Últimos movimientos</h3>
+            <div class="movements-card card">
+              <div class="card-body">
+                <table class="movements-table table" id="movements-table" role="table">
+                  <thead>
+                    <tr>
+                      <th><i class="fas fa-calendar-alt"></i> Fecha</th>
+                      <th><i class="fas fa-exchange-alt"></i> Tipo</th>
+                      <th><i class="fas fa-seedling"></i> Especie</th>
+                      <th><i class="fas fa-wallet"></i> Cartera</th>
+                      <th class="right"><i class="fas fa-money-bill-wave"></i> Monto (unidades)</th>
+                      <th aria-hidden="true"><i class="fas fa-cog"></i></th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: add/edit movement -->
+  <div id="movement-modal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="move-modal-title">
+    <div class="modal-dialog">
+      <header class="modal-header">
+        <h2 id="move-modal-title"><i class="fas fa-exchange-alt"></i> Nuevo movimiento</h2>
+        <button class="modal-close" id="move-modal-close" aria-label="Cerrar">&times;</button>
+      </header>
+      <div class="modal-body">
+        <div class="input-group">
+          <label for="mov-client"><i class="fas fa-user"></i> Cliente</label>
+          <select id="mov-client" aria-label="Cliente"></select>
+        </div>
+
+        <div class="grid-2">
+          <div class="input-group">
+            <label for="mov-type"><i class="fas fa-tag"></i> Tipo</label>
+            <select id="mov-type">
+              <option value="compra">Compra</option>
+              <option value="venta">Venta</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label for="mov-cartera"><i class="fas fa-wallet"></i> Cartera</label>
+            <select id="mov-cartera" aria-label="Seleccionar cartera"></select>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="mov-fondo-select"><i class="fas fa-seedling"></i> Especie</label>
+          <select id="mov-fondo-select" aria-label="Seleccionar especie"></select>
+          <input id="mov-fondo-new" type="text" placeholder="Nueva especie (p.e. YPF)..." style="margin-top:8px; display:none;">
+        </div>
+
+        <div class="grid-2">
+          <div class="input-group">
+            <label for="mov-monto"><i class="fas fa-dollar-sign"></i> Monto (unidades)</label>
+            <input id="mov-monto" type="number" step="0.01" placeholder="0.00" min="0">
+          </div>
+          <div class="input-group">
+            <label for="mov-fecha"><i class="fas fa-calendar-day"></i> Fecha</label>
+            <input id="mov-fecha" type="date">
+          </div>
+        </div>
+        <div class="hint muted">
+          <i class="fas fa-info-circle"></i> Al guardar la compra/venta se ajustará el nominal de la especie en la cartera seleccionada.
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button id="save-movement" class="btn-save"><i class="fas fa-save"></i> Guardar</button>
+        <button id="cancel-movement" class="btn-close">Cancelar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Confirm delete movement -->
+  <div id="confirm-delete-modal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <header class="modal-header">
+        <h2><i class="fas fa-exclamation-triangle"></i> Confirmar eliminación</h2>
+        <button class="modal-close" id="confirm-delete-close" aria-label="Cerrar">&times;</button>
+      </header>
+      <div class="modal-body">
+        <p id="confirm-delete-text">¿Eliminar movimiento seleccionado?</p>
+      </div>
+      <footer class="modal-footer">
+        <button id="confirm-delete-yes" class="btn-danger"><i class="fas fa-trash-alt"></i> Eliminar</button>
+        <button id="confirm-delete-no" class="btn-close">Cancelar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Portfolio detail modal -->
+  <div id="portfolio-modal" class="modal" aria-hidden="true">
+    <div class="modal-dialog">
+      <header class="modal-header">
+        <h2>Detalle de cartera <span id="portfolio-meta" style="font-weight:600;"></span></h2>
+        <button class="modal-close" id="portfolio-modal-close" aria-label="Cerrar">&times;</button>
+      </header>
+      <div class="modal-body">
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+          <div>
+            <label for="portfolio-fund-filter">Filtrar especie</label>
+            <input id="portfolio-fund-filter" placeholder="Filtrar dentro de la cartera..." />
+          </div>
+          <div id="portfolio-totals" class="muted" style="white-space:nowrap;"></div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <table class="movements-table" id="portfolio-funds-table" style="width:100%">
+            <thead>
+              <tr>
+                <th>Especie</th>
+                <th>Nominal (unidades)</th>
+                <th>Rend. mensual</th>
+                <th>Rend. total</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button id="portfolio-save-changes" class="btn-save">Guardar cambios</button>
+        <button id="portfolio-modal-close-btn" class="btn-close">Cerrar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Species history modal -->
+  <div id="species-history-modal" class="modal" aria-hidden="true">
+    <div class="modal-dialog">
+      <header class="modal-header">
+        <h2>Historial de la especie <span id="species-history-meta" style="font-weight:600;"></span></h2>
+        <button class="modal-close" id="species-history-close" aria-label="Cerrar">&times;</button>
+      </header>
+      <div class="modal-body">
+        <table class="movements-table" id="species-history-table" style="width:100%">
+          <thead>
+            <tr><th>Fecha</th><th>Tipo</th><th>Cartera</th><th class="right">Monto (unidades)</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <footer class="modal-footer">
+        <button id="species-history-close-btn" class="btn-close">Cerrar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Sidebar & page logic -->
+  <script src="components/sidebar.js"></script>
+  <script src="components/fondos.js" defer></script>
+</body>
+</html>
