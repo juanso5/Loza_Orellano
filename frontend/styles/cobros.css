@@ -1,0 +1,142 @@
+/* =========================================================
+   styles/cobros.css — Estilos para el módulo de cobros
+   ========================================================= */
+
+:root{
+  --content-max: 1200px;
+  --accent: #0f6cff;
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --text: #26323a;
+  --muted: #5b6b76;
+  --border: #e6edf3;
+  --danger: #e74c3c;
+  --warning: #f39c12;
+  --success: #27ae60;
+}
+
+*{ box-sizing: border-box; }
+html,body{ height:100%; }
+body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--text); }
+
+/* ---------- MAIN CONTENT ---------- */
+.main-content { min-height:100vh; }
+.main-content.expanded { padding-left:0; transition: padding-left .3s; }
+.main-inner { width: calc(100vw - 60px); max-width: var(--content-max); margin: 14px auto; padding: 0 10px; }
+@media (max-width: 980px){ .main-inner{ width:calc(100vw - 30px); } }
+
+/* ---------- TOP / BUTTONS ---------- */
+.top-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.top-row h1 { margin:0; font-size:1.25rem; font-weight:700; }
+.actions-right { display:flex; align-items:center; gap:10px; }
+.btn-add { 
+  background:var(--accent); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer;
+  display:inline-flex; gap:8px; align-items:center; font-size:.95rem; box-shadow:0 8px 22px rgba(15,108,255,.12);
+}
+.btn-add:hover { filter:brightness(.95); }
+
+/* ---------- NUEVA TABLA DE CLIENTES ---------- */
+.clientes-cobros-card { margin-bottom: 16px; }
+.text-right { text-align: right; }
+.table tbody tr.highlight-row { background-color: #f9fbff; }
+.table tbody tr.highlight-row:hover { background-color: #f7f9fe; }
+
+/* ---------- CARDS ---------- */
+.card { background:var(--card); border-radius:10px; box-shadow:0 1px 6px rgba(16,24,40,.06); overflow:hidden; margin-bottom:16px; }
+.card-header { 
+  padding:12px 16px; border-bottom:1px solid #eef2f6; display:flex; align-items:center; justify-content:space-between;
+}
+.card-header h3 { margin:0; font-size:1.05rem; }
+.card-body { padding:12px 16px; }
+.card-controls { display:flex; align-items:center; gap:10px; }
+label.inline { display:flex; align-items:center; gap:6px; }
+
+/* ---------- TABLES ---------- */
+.table-wrapper { overflow-x:auto; }
+.table { width:100%; border-collapse:collapse; min-width:100%; font-size:.95rem; }
+.table th { text-align:left; padding:10px; color:var(--muted); font-weight:500; border-bottom:1px solid var(--border); }
+.table td { padding:12px 10px; border-bottom:1px solid var(--border); }
+.table.compact td { padding:8px 10px; }
+.table tbody tr:hover { background:#f9fafc; }
+.table-actions { display:flex; align-items:center; gap:6px; justify-content:flex-end; }
+.grand-total-row td { background:#f9fafc; }
+.group-row td { background:#f5f7fa; }
+.subtotal-row td { font-weight:600; border-bottom:2px solid #eef2f6; }
+
+/* ---------- FILTERS ---------- */
+.filters { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end; padding:4px 0; }
+.filter-item { display:flex; flex-direction:column; gap:6px; }
+.filter-actions { margin-left:auto; align-self:flex-end; }
+.filters input, .filters select,
+.card-controls select {
+  padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:.95rem; background:white;
+}
+.btn-outline {
+  background:transparent; color:var(--accent); border:1px solid var(--border); padding:8px 12px; border-radius:8px; 
+  font-size:.95rem; cursor:pointer;
+}
+.btn-outline:hover { background:#f9fafc; }
+
+/* ---------- BADGES ---------- */
+.badge {
+  font-size:.85rem; padding:4px 8px; border-radius:12px; font-weight:500; display:inline-block;
+}
+.badge.neutral { background:#eef2f6; color:#3d4f5d; }
+.badge.warning { background:#fff8e0; color:#976500; }
+.badge.danger { background:#ffefef; color:#9a2a22; }
+.badge.success { background:#e7f5ef; color:#1c633f; }
+.cartera-tag { background:#f0f6ff; color:#3a6cb5; padding:4px 8px; border-radius:12px; font-size:.85rem; }
+
+/* ---------- MODAL ---------- */
+.modal {
+  position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:1000; display:none;
+  align-items:center; justify-content:center; backdrop-filter:blur(3px);
+}
+.modal-dialog {
+  width:min(90vw, 650px); background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(16,24,40,.2); 
+  max-height:85vh; display:flex; flex-direction:column; overflow:hidden;
+}
+.modal-header { padding:12px 16px; border-bottom:1px solid #eef2f6; }
+.modal-header h3 { margin:0; }
+.modal-body { padding:14px 16px; flex:1 1 auto; overflow-y:auto; }
+.modal-footer { 
+  padding:12px 16px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eef2f6;
+}
+
+/* ---------- FORMS ---------- */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px; }
+label { font-size:.95rem; color:var(--muted); margin-bottom:4px; }
+input, select, textarea {
+  padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:.95rem; background:#fff;
+  max-width:100%; width:100%;
+}
+.muted-tip { font-size:.9rem; color:var(--muted); margin:10px 0; }
+.btn-close {
+  background:transparent; color:var(--text); border:1px solid var(--border); padding:10px 12px; border-radius:8px;
+  font-size:.95rem; cursor:pointer;
+}
+.btn-save {
+  background:var(--accent); color:#fff; border:none; padding:10px 12px; border-radius:8px; cursor:pointer;
+  display:inline-flex; gap:8px; align-items:center; font-size:.95rem;
+}
+.btn-save:hover { filter:brightness(.95); }
+.btn-icon {
+  background:transparent; border:none; width:32px; height:32px; cursor:pointer; display:inline-flex;
+  align-items:center; justify-content:center;
+}
+.btn-icon:hover { background:#f2f5f8; border-radius:6px; }
+
+/* ---------- CARTERAS ---------- */
+.carteras-block { 
+  margin-top:16px; border:1px solid var(--border); border-radius:10px; overflow:hidden;
+  background:#f9fafc;
+}
+.carteras-top { 
+  display:flex; align-items:center; justify-content:space-between; padding:12px; 
+  border-bottom:1px solid var(--border);
+}
+.carteras-top h4 { margin:0; font-size:1rem; }
+
+/* ---------- CRONOGRAMA ---------- */
+.cronograma-header { margin-bottom:12px; font-weight:500; }

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cobros | Plataforma de Inversiones</title>
+  <link rel="stylesheet" href="styles/cobros.css" />
+</head>
+<body>
+  <main class="main-content" id="mainContent">
+    <div class="main-inner">
+      <div class="top-row">
+        <h1>Cobros</h1>
+        <div class="actions-right">
+          <button id="btnAddPlan" class="btn-add">➕ Nuevo plan de cobro</button>
+        </div>
+      </div>
+
+      <!-- Próximos cobros por cliente (independiente de filtros) -->
+      <section class="card clientes-cobros-card">
+        <div class="card-header">
+          <h3>Próximos cobros por cliente</h3>
+          <div class="card-controls">
+            <label class="inline">
+              <span>Rango:</span>
+              <select id="rangeClientesProximos">
+                <option value="7">1 semana</option>
+                <option value="14" selected>2 semanas</option>
+                <option value="30">1 mes</option>
+                <option value="90">3 meses</option>
+                <option value="365">1 año</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-wrapper">
+            <table class="table compact" id="tableClientesCobro">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Asesor</th>
+                  <th>Fecha más cercana</th>
+                  <th>Periodo</th>
+                  <th class="text-right">Monto</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+              <tfoot>
+                <tr class="grand-total-row">
+                  <td colspan="4" style="text-align:right;font-weight:800;">Total en rango</td>
+                  <td id="clientesTotalCobro" class="text-right">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Filtros generales (afectan secciones inferiores, no la caja superior) -->
+      <section class="card filters-card">
+        <div class="filters">
+          <div class="filter-item">
+            <label for="filterAsesor">Asesor</label>
+            <input type="text" id="filterAsesor" placeholder="Nombre del asesor" />
+          </div>
+          <div class="filter-item">
+            <label for="filterCliente">Cliente</label>
+            <input type="text" id="filterCliente" placeholder="Nombre del cliente" />
+          </div>
+          <div class="filter-item">
+            <label for="filterPeriodo">Periodo del plan</label>
+            <select id="filterPeriodo">
+              <option value="">Todos</option>
+              <option value="mensual">Mensual</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="filterEstado">Estado de cuota</label>
+            <select id="filterEstado">
+              <option value="">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="pagado">Pagado</option>
+              <option value="vencido">Vencido</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button class="btn-outline" id="btnClearFilters">Limpiar</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Resumen por cartera (siguiente cobro por plan) -->
+      <section class="card resumen-carteras-card">
+        <div class="card-header">
+          <h3>Resumen por cartera (siguiente cobro)</h3>
+        </div>
+        <div class="card-body">
+          <div class="table-wrapper">
+            <table class="table" id="tableResumenCarteras">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Asesor</th>
+                  <th>Periodo</th>
+                  <th>Próxima fecha</th>
+                  <th>Cartera</th>
+                  <th>Base (ARS)</th>
+                  <th>Arancel anual</th>
+                  <th>Monto cuota</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+              <tfoot>
+                <tr class="grand-total-row">
+                  <td colspan="7" style="text-align:right;font-weight:800;">Total global próximo cobro</td>
+                  <td id="grandTotalResumen">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Planes de cobro -->
+      <section class="card plans-card">
+        <div class="card-header">
+          <h3>Planes de cobro</h3>
+        </div>
+        <div class="card-body">
+          <div class="table-wrapper">
+            <table class="table" id="tablePlanes">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Asesor</th>
+                  <th>Arancel default</th>
+                  <th>Periodo</th>
+                  <th>Inicio</th>
+                  <th>Próxima cuota</th>
+                  <th># Carteras</th>
+                  <th>Total cuota</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cuotas programadas -->
+      <section class="card cuotas-card">
+        <div class="card-header">
+          <h3>Cuotas programadas</h3>
+          <div class="card-controls">
+            <label class="inline">
+              <span>Rango:</span>
+              <select id="rangeCuotas">
+                <option value="30">Próximos 30 días</option>
+                <option value="60" selected>Próximos 60 días</option>
+                <option value="90">Próximos 90 días</option>
+                <option value="365">Próximo año</option>
+                <option value="all">Todo</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-wrapper">
+            <table class="table" id="tableCuotas">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Asesor</th>
+                  <th>Plan</th>
+                  <th>Monto</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modal: Nuevo/Editar Plan -->
+  <div class="modal" id="modalPlan" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="modalPlanTitle">Nuevo plan de cobro</h3>
+      </div>
+      <div class="modal-body">
+        <div class="grid-2">
+          <div>
+            <label>Cliente</label>
+            <input type="text" id="inpCliente" placeholder="Nombre y apellido / Razón social" />
+          </div>
+          <div>
+            <label>Asesor</label>
+            <input type="text" id="inpAsesor" placeholder="Nombre del asesor" />
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div>
+            <label>Arancel anual default (%)</label>
+            <input type="number" id="inpArancel" min="0" step="0.01" placeholder="Ej: 2.5" />
+          </div>
+          <div>
+            <label>Periodo</label>
+            <select id="inpPeriodo">
+              <option value="mensual">Mensual</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+          </div>
+          <div id="cellCuotasAnio" style="display:none;">
+            <label>Cuotas por año</label>
+            <input type="number" id="inpCuotasAnio" min="1" max="24" step="1" placeholder="Ej: 10" />
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <label>Inicio</label>
+            <input type="date" id="inpInicio" />
+          </div>
+          <div>
+            <label>Notas</label>
+            <input type="text" id="inpNotas" placeholder="Opcional" />
+          </div>
+        </div>
+
+        <div class="muted-tip">
+          Cada cuota se calcula por cartera: Base × (Arancel anual / 100) ÷ cuotas del período.
+        </div>
+
+        <div class="carteras-block">
+          <div class="carteras-top">
+            <h4>Carteras</h4>
+            <button class="btn-outline" id="btnAddCartera">+ Agregar cartera</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="table compact carteras-table">
+              <thead>
+                <tr>
+                  <th>Nombre de cartera</th>
+                  <th>Base (ARS)</th>
+                  <th>Arancel anual (%)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="carterasBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-close" data-close="#modalPlan">Cancelar</button>
+        <button class="btn-save" id="btnSavePlan">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cronograma del plan -->
+  <div class="modal" id="modalCronograma" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Cronograma del plan</h3>
+      </div>
+      <div class="modal-body">
+        <div id="cronogramaHeader" class="cronograma-header"></div>
+        <div class="table-wrapper">
+          <table class="table compact">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Monto (total plan)</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="cronogramaBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-close" data-close="#modalCronograma">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Registrar pago -->
+  <div class="modal" id="modalPago" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Registrar pago</h3>
+      </div>
+      <div class="modal-body">
+        <div class="grid-2">
+          <div>
+            <label>Fecha de pago</label>
+            <input type="date" id="inpFechaPago" />
+          </div>
+          <div>
+            <label>Monto</label>
+            <input type="number" id="inpMontoPago" min="0" step="0.01" />
+          </div>
+        </div>
+        <div>
+          <label>Observaciones</label>
+          <input type="text" id="inpObsPago" placeholder="Opcional" />
+        </div>
+        <div class="muted-tip">
+          Si el monto difiere del programado, se registrará igualmente como pagado con el valor ingresado.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-close" data-close="#modalPago">Cancelar</button>
+        <button class="btn-save" id="btnConfirmPago">Confirmar pago</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="components/cobros.js"></script>
+</body>
+</html>
