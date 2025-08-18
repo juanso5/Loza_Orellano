@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import Head from 'next/head';
-import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/router';
 
 export default function Login() {
