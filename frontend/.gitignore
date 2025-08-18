@@ -1,0 +1,63 @@
+# Dependencias
+node_modules/
+
+# Compilados / builds
+dist/
+build/
+out/
+.next/
+.svelte-kit/
+.astro/
+storybook-static/
+coverage/
+reports/
+
+# Herramientas de bundling / caches
+.cache/
+.parcel-cache/
+.vite/
+.eslintcache
+.stylelintcache
+.tsbuildinfo
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Entornos
+.env
+.env.*.local
+!.env.example
+
+# Sistemas / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Tests / e2e
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+.cypress/
+playwright-report/
+test-results/
+
+# Temporal
+tmp/
+temp/
+*.tmp
+*.swp
+
+# Framework hosting
+.vercel/
+.netlify/
+
+# Otros
+.sass-cache/
+*.local

@@ -1,0 +1,73 @@
+/* Área principal (margen para el sidebar fijo) */
+.page { display: flex; }
+.main { flex: 1; padding: 24px; margin-left: var(--sidebar-width, 240px); background: #f4f6f9; min-height: 100vh; }
+
+/* Search bar */
+.searchBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; background: #fff; padding: 12px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,.06); }
+.searchInput { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; font-size: 1rem; }
+.btnAdd { background: #0f6cff; color: #fff; border: 0; padding: 10px 14px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 8px 22px rgba(15,108,255,0.12); }
+.btnAdd:hover { filter: brightness(.95); }
+
+/* Section & list */
+.clientsSection { background: #fff; padding: 18px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,.06); }
+.clientsSection h2 { margin: 0 0 14px; font-size: 1.25rem; color: #133150; border-bottom: 2px solid #0f6cff; padding-bottom: 8px; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.empty { padding: 18px; color: #475569; background: #f8fafc; border: 1px dashed #e2e8f0; border-radius: 10px; text-align: center; }
+
+/* Card */
+.clientItem { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 14px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.02); cursor: pointer; }
+.clientItem:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); transform: translateY(-2px); transition: .15s ease; }
+.clientMain { flex: 1; }
+.clientName { margin: 0 0 6px 0; font-size: 1rem; color: #0f172a; }
+.clientMeta { display: flex; gap: 10px; color: #475569; font-size: .92rem; flex-wrap: wrap; }
+
+.clientActions { display: flex; gap: 8px; }
+.actionBtn { background: transparent; color: #26323a; border: 1px solid rgba(20,30,40,0.06); width: 40px; height: 40px; padding: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; transition: transform .12s ease, background .12s ease, color .12s ease; }
+.actionBtn:hover { background: rgba(15,108,255,0.06); transform: translateY(-3px); }
+
+
+/* Modales (overlay + dialog) */
+.modalOverlay { position: fixed; inset: 0; background: rgba(6, 9, 14, 0.45); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 2000; }
+.modalDialog { width: min(760px, 92vw); background: #fff; border-radius: 14px; box-shadow: 0 24px 64px rgba(16, 24, 40, 0.22); overflow: hidden; }
+.modalHeader { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #eef2f7; }
+.modalHeader h2 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+.modalClose { border: 0; background: transparent; cursor: pointer; width: 36px; height: 36px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: #334155; }
+.modalClose:hover { background: #eef2f7; }
+.modalBody { padding: 16px 18px 6px; }
+.modalFooter { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px 16px; border-top: 1px solid #eef2f7; margin-top: 10px; }
+
+/* Modal contenido simple (ver cliente) */
+.modalContent { background: #fff; border-radius: 14px; width: min(560px, 92vw); padding: 18px; box-shadow: 0 24px 64px rgba(16,24,40,.22); }
+.viewTitle { margin: 0 0 10px; }
+
+/* Form */
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.span2 { grid-column: 1 / -1; }
+.formGroup { display: flex; flex-direction: column; }
+.formGroup label { font-size: .92rem; font-weight: 600; color: #1f2937; margin-bottom: 6px; }
+.required { color: #dc3545; }
+.hint { color: #6b7280; font-size: .85rem; margin-top: 6px; }
+
+.inputWithIcon { position: relative; }
+.inputIcon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; font-size: .95rem; }
+
+.formGroup input,
+.formGroup select,
+.formGroup textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 10px; background: #fbfdff; padding: 10px 12px; font-size: .98rem; color: #0f172a; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.inputWithIcon input, .inputWithIcon select { padding-left: 38px; }
+.formGroup textarea { min-height: 90px; resize: vertical; }
+.formGroup input:focus, .formGroup select:focus, .formGroup textarea:focus { outline: none; border-color: #7c9cff; background: #fff; box-shadow: 0 0 0 3px rgba(124,156,255,.18); }
+
+.error { color: #dc3545; font-size: .86rem; margin-top: 4px; min-height: 1em; }
+
+.btnSave { background: #0f6cff; color: #fff; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.btnSave:hover { filter: brightness(.95); }
+.btnClose { background: transparent; border: 1px solid #e6edf3; padding: 10px 12px; border-radius: 10px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.btnDanger { background: #dc3545; color: #fff; border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+.btnDanger:hover { filter: brightness(.95); }
+
+/* Campo condicional (sin colapsar layout) */
+.hidden { visibility: hidden; pointer-events: none; }
+
+/* Responsive */
+@media (max-width: 640px) { .formGrid { grid-template-columns: 1fr; } .main { margin-left: 0; } }

@@ -1,5 +1,5 @@
-/* Sidebar Styles */
-body .sidebar {
+/* Sidebar Styles (legacy global) */
+.sidebar {
     position: fixed;
     top: 0;
     left: 0;
@@ -12,15 +12,6 @@ body .sidebar {
     transition: width 0.3s;
     z-index: 1000;
     overflow-x: hidden;
-}
-
-.sidebar h2 {
-    font-size: 1.5rem;
-    margin-bottom: 2%;
-    color: #ecf0f1;
-    text-align: center;
-    padding: 0;
-    margin-top: 2.5rem;
 }
 
 .sidebar ul {
@@ -57,6 +48,11 @@ body .sidebar {
     color: #fff;
 }
 
+.sidebar ul li.active a {
+    background-color: #34495e;
+    font-weight: 600;
+}
+
 .sidebar ul li a i {
     font-size: 1.3rem;
     min-width: 24px;
@@ -81,63 +77,15 @@ body .sidebar {
     transition: background 0.3s;
 }
 
-.sidebar-toggle:hover {
-    background: #2c3e50;
-}
+.sidebar-toggle:hover { background: #2c3e50; }
 
 /* Sidebar Collapsed */
-.sidebar.collapsed {
-    width: 80px;
-    min-width: 60px;
-}
-
-
-.sidebar.collapsed .menu-text {
-    display: none;
-}
-
-.sidebar.collapsed ul li a {
-    justify-content: center;
-    padding: 1rem 0;
-}
-
-.sidebar.collapsed ul li {
-    margin-bottom: 1rem;
-}
-
-.sidebar.collapsed ~ .main-content {
-    margin-left: 60px;
-}
-
-/* Sidebar Logo */
-.sidebar .logo {
-    display: block;
-    max-width: 80%;
-    min-width: 60px;
-    height: auto;
-    margin: 0 auto 2rem auto;
-    border-radius: 10%;
-    box-shadow: 0 4px 24px rgba(44, 62, 80, 0.14);
-    transition: box-shadow 0.3s, transform 0.3s, max-width 0.3s, margin 0.3s;
-}
-
-.sidebar.collapsed .logo {
-    max-width: 25px;
-    min-width: 25px;
-    margin: 0.5rem auto 1.5rem auto;
-}
-
-.sidebar .logo:hover {
-    box-shadow: 0 12px 32px rgba(44, 62, 80, 0.22);
-    transform: scale(1.07);
-}
+.sidebar.collapsed { width: 60px; min-width: 60px; }
+.sidebar.collapsed .menu-text { display: none; }
+.sidebar.collapsed ul li a { justify-content: center; padding: 1rem 0; }
+.sidebar.collapsed ul li { margin-bottom: 1rem; }
+.sidebar.collapsed ~ .main-content { margin-left: 60px; }
 
 /* Main Content Transition */
-.main-content {
-    flex: auto;
-    margin-left: 220px; /* Igual al min-width de la sidebar */
-    transition: margin-left 0.3s;
-}
-.main-content.expanded {
-    margin-left: 60px; /* coincide con sidebar colapsada */
-}
+.main-content { flex: auto; margin-left: 220px; transition: margin-left 0.3s; }
+.main-content.expanded { margin-left: 60px; }
