@@ -4,10 +4,13 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { getSupabaseBrowserClient } from '../lib/supabaseClient';
+import { useRouter } from 'next/navigation';
 // Using global sidebar.css styles (legacy like)
 
 export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggleProp }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const collapsedControlled = typeof collapsedProp !== 'undefined';
   const collapsed = collapsedControlled ? collapsedProp : internalCollapsed;
@@ -63,6 +66,14 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
         </li>
         <li className={isActive('/fondos') ? 'active' : ''}>
           <Link href="/fondos"><i className="fas fa-wallet" /> <span className="menu-text">Fondos</span></Link>
+        </li>
+        <li>
+          <button
+            onClick={async () => { const sb = getSupabaseBrowserClient(); if (sb) { await sb.auth.signOut(); } router.replace('/login'); }}
+            style={{ background:'transparent', border:'none', color:'inherit', width:'100%', textAlign:'left', padding:'10px 16px', cursor:'pointer' }}
+          >
+            <i className="fas fa-sign-out-alt" /> <span className="menu-text">Salir</span>
+          </button>
         </li>
   {/* Ruta de rendimientos aún no implementada */}
       </ul>
