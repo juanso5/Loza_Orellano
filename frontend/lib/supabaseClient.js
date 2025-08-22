@@ -9,9 +9,8 @@ export function getSupabaseBrowserClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   if (!client) {
-    client = createBrowserClient(url, key, {
-      cookieOptions: { name: 'sb-auth-token' },
-    });
+  // Use default cookie naming (sb-<project-ref>-auth-token) for compatibility with SSR/middleware
+  client = createBrowserClient(url, key);
   }
   return client;
 }

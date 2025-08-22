@@ -2,25 +2,24 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-// Public routes that don't require auth
-const publicRoutes = [
-  '/login',
-  '/api/auth/callback',
-  '/_next',
-  '/favicon.ico',
-  '/robots.txt',
-];
-
 export async function middleware(req) {
   const { nextUrl, cookies: reqCookies } = req;
   const url = nextUrl.clone();
 
-  // Allow public routes
-  if (publicRoutes.some((p) => nextUrl.pathname.startsWith(p))) {
-    return NextResponse.next();
-  }
-
   const res = NextResponse.next({ request: { headers: req.headers } });
+
+  // Fast path: if there's no Supabase auth cookie, block access immediately
+  try {
+    const all = typeof reqCookies.getAll === 'function' ? reqCookies.getAll() : [];
+    const hasSbAuth = all.some((c) => /^sb-.*-auth-token$/.test(c.name));
+    if (!hasSbAuth) {
+      url.pathname = '/login';
+      url.searchParams.set('redirectedFrom', nextUrl.pathname);
+      return NextResponse.redirect(url);
+    }
+  } catch (_) {
+    // ignore and continue with normal flow
+  }
 
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supaKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -65,6 +64,12 @@ export async function middleware(req) {
 
 export const config = {
   matcher: [
-    '/((?!_next|.*\..*|api/auth/callback).*)',
+  // Protect explicit app routes; exclude login and static assets by omission
+  '/',
+  '/home/:path*',
+  '/fondos/:path*',
+  '/cliente/:path*',
+  '/movimientos/:path*',
+  '/dashboard/:path*',
   ],
 };
