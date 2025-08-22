@@ -1,7 +1,7 @@
-import Head from 'next/head';
+"use client";
 import { useEffect, useState } from 'react';
-import Sidebar from '../components/Sidebar';
-import CSVMovimientos from '../components/CSVMovimientos';
+import Sidebar from '../../components/Sidebar';
+import CSVMovimientos from '../../components/CSVMovimientos';
 
 export default function Movimientos() {
   const [collapsed, setCollapsed] = useState(false);
@@ -13,8 +13,7 @@ export default function Movimientos() {
   }, []);
 
   return (
-    <>
-      <Head><title>Movimientos - Loza Orellano</title></Head>
+  <>
       <Sidebar collapsed={collapsed} toggleSidebar={() => {
         setCollapsed(c => {
           const next = !c; try { localStorage.setItem('sidebarCollapsed', JSON.stringify(next)); } catch {}

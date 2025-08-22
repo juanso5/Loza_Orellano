@@ -1,11 +1,11 @@
-import Head from "next/head";
+"use client";
 import { useMemo, useState, useCallback } from "react";
-import Sidebar from "../components/Sidebar";
-import ClienteCard from "../components/ClienteCard";
-import ClienteFormModal from "../components/ClienteFormModal";
-import ClienteViewModal from "../components/ClienteViewModal";
-import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
-import styles from "../styles/clientes.module.css";
+import Sidebar from "../../components/Sidebar";
+import ClienteCard from "../../components/ClienteCard";
+import ClienteFormModal from "../../components/ClienteFormModal";
+import ClienteViewModal from "../../components/ClienteViewModal";
+import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
+import styles from "../../styles/clientes.module.css";
 import { useEffect } from 'react';
 
 // ——— Utils (comparten misma lógica que tu JS original)
@@ -143,9 +143,6 @@ export default function ClientesPage() {
 
   return (
     <>
-      <Head>
-        <title>Clientes</title>
-      </Head>
 
       <Sidebar collapsed={collapsed} toggleSidebar={() => {
         setCollapsed(c => { const n=!c; try { localStorage.setItem('sidebarCollapsed', JSON.stringify(n)); } catch {}; return n; });

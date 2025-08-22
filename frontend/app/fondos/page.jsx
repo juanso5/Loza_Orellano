@@ -1,13 +1,13 @@
-// pages/fondos.jsx
+"use client";
 import React, { useState, useEffect } from 'react';
-import SidebarProvider from '../components/SidebarProvider'; // Asumiendo que tienes un componente para el sidebar
-import ClientList from '../components/ClientList'; // Nuevo componente para la lista de clientes
-import ClientDetail from '../components/ClientDetail'; // Nuevo componente para el detalle del cliente
-import MovementModal from '../components/MovementModal'; // Modal para nuevo movimiento
-import ConfirmDeleteModal from '../components/ConfirmDeleteModal'; // Modal para confirmar eliminación
-import AddPortfolioModal from '../components/AddPortfolioModal'; // Modal para agregar cartera
-import PortfolioDetailModal from '../components/PortfolioDetailModal'; // Modal para detalle de cartera
-import SpeciesHistoryModal from '../components/SpeciesHistoryModal'; // Modal para historial de especie
+import SidebarProvider from '../../components/SidebarProvider'; // Asumiendo que tienes un componente para el sidebar
+import ClientList from '../../components/ClientList'; // Nuevo componente para la lista de clientes
+import ClientDetail from '../../components/ClientDetail'; // Nuevo componente para el detalle del cliente
+import MovementModal from '../../components/MovementModal'; // Modal para nuevo movimiento
+import ConfirmDeleteModal from '../../components/ConfirmDeleteModal'; // Modal para confirmar eliminación
+import AddPortfolioModal from '../../components/AddPortfolioModal'; // Modal para agregar cartera
+import PortfolioDetailModal from '../../components/PortfolioDetailModal'; // Modal para detalle de cartera
+import SpeciesHistoryModal from '../../components/SpeciesHistoryModal'; // Modal para historial de especie
 
 const LS_KEY = 'fondos_app_v2';
 

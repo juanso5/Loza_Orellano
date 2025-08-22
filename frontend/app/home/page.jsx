@@ -7,10 +7,10 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
-import Sidebar from "../components/Sidebar";
-import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
-import TaskModal from "../components/TaskModal";
-import TaskListCard from "../components/TaskListCard";
+import Sidebar from "../../components/Sidebar";
+import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
+import TaskModal from "../../components/TaskModal";
+import TaskListCard from "../../components/TaskListCard";
 
 const PRIORITY_CONFIG = {
   alta: { color: '#e74c3c', className: 'prioridad-alta' },

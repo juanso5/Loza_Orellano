@@ -3,11 +3,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation';
 // Using global sidebar.css styles (legacy like)
 
 export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggleProp }) {
-  const router = useRouter();
+  const pathname = usePathname();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const collapsedControlled = typeof collapsedProp !== 'undefined';
   const collapsed = collapsedControlled ? collapsedProp : internalCollapsed;
@@ -40,8 +40,8 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
   };
 
   const isActive = (path) => {
-    if (!router?.pathname) return false;
-    return router.pathname === path || router.pathname.startsWith(path + '/');
+    if (!pathname) return false;
+    return pathname === path || pathname.startsWith(path + '/');
   };
 
   // (Submenús eliminados; ya no se requiere estado de submenús)
@@ -55,8 +55,8 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
         <li className={isActive('/home') ? 'active' : ''}>
           <Link href="/home"><i className="fas fa-home" /> <span className="menu-text">Inicio</span></Link>
         </li>
-        <li className={isActive('/clientes') ? 'active' : ''}>
-          <Link href="/clientes"><i className="fas fa-users" /> <span className="menu-text">Clientes</span></Link>
+        <li className={isActive('/cliente') ? 'active' : ''}>
+          <Link href="/cliente"><i className="fas fa-users" /> <span className="menu-text">Clientes</span></Link>
         </li>
         <li className={isActive('/movimientos') ? 'active' : ''}>
           <Link href="/movimientos"><i className="fas fa-exchange-alt" /> <span className="menu-text">Movimientos</span></Link>
@@ -64,9 +64,7 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
         <li className={isActive('/fondos') ? 'active' : ''}>
           <Link href="/fondos"><i className="fas fa-wallet" /> <span className="menu-text">Fondos</span></Link>
         </li>
-        <li className={isActive('/rendimientos') ? 'active' : ''}>
-          <Link href="/rendimientos"><i className="fas fa-chart-line" /> <span className="menu-text">Rendimientos</span></Link>
-        </li>
+  {/* Ruta de rendimientos aún no implementada */}
       </ul>
     </div>
   );
