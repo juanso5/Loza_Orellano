@@ -223,8 +223,8 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
             </div>
 
             <div className={`${styles.modalFooter} ${styles.span2}`}>
-              <button type="submit" className={styles.btnSave}>Guardar</button>
-              <button type="button" className={styles.btnClose} onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn-save"><i className="fas fa-check"></i> Guardar</button>
+              <button type="button" className="btn-close" onClick={onClose}><i className="fas fa-times"></i> Cancelar</button>
             </div>
           </form>
         </div>

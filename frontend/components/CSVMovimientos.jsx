@@ -259,8 +259,10 @@ export default function CSVMovimientos() {
               <div className="form-group form-span-2"><label htmlFor="obsInput">Observaciones</label><textarea id="obsInput" rows={3} /></div>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn save-btn" id="movementSaveBtn">Guardar</button>
-              <button type="button" className="btn" id="movementCancelBtn">Cancelar</button>
+              <button type="button" className="btn-save" id="movementSaveBtn">
+                <i className="fas fa-check" /> Guardar</button>
+              <button type="button" className="btn-close" id="movementCancelBtn">
+                <i className="fas fa-times" /> Cancelar</button>
             </div>
           </form>
         </div></div>
@@ -271,7 +273,10 @@ export default function CSVMovimientos() {
         <div className="modal-dialog"><div className="modal-content">
           <div className="modal-header"><h3 id="clientModalTitle">Cliente</h3><button className="modal-close btn-close" aria-label="Cerrar"><i className="fas fa-times" /></button></div>
           <div className="modal-body" id="clientModalBody" />
-          <div className="modal-footer"><button className="btn" id="clientCloseBtn">Cerrar</button></div>
+          <div className="modal-footer">
+            <button className="btn-close" id="clientCloseBtn">
+              <i className="fas fa-times" /> Cerrar</button>
+          </div>
         </div></div>
       </div>
 

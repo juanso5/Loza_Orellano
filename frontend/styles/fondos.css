@@ -110,9 +110,9 @@ body {
 .modal-body label { font-size:0.9rem; color:#334155; }
 .modal-body input, .modal-body select { padding:10px 12px; border-radius:8px; border:1px solid #e6edf3; font-size:0.95rem; }
 .modal-footer { padding:12px 16px; display:flex; gap:8px; justify-content:flex-end; border-top:1px solid #eef2f6; }
-.btn-save { background:var(--accent); color:white; border:0; padding:10px 12px; border-radius:8px; cursor:pointer; }
+.btn-save { background:var(--accent); color:white; border:0; padding:6px 12px; border-radius:8px; cursor:pointer; }
 .btn-save:hover { background:var(--accent-2); }
-.btn-close { background:transparent; border:1px solid #e6edf3; padding:10px 12px; border-radius:8px; cursor:pointer; }
+.btn-close { background:transparent; border:1px solid #f3e8e6; padding:6px 12px; border-radius:8px; cursor:pointer; }
 .btn-danger { background:var(--danger); color:white; border:0; padding:10px 12px; border-radius:8px; cursor:pointer; }
 
 /* small field hints/errors */
