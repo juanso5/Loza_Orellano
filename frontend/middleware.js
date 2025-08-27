@@ -8,52 +8,48 @@ export async function middleware(req) {
 
   const res = NextResponse.next({ request: { headers: req.headers } });
 
-  // Fast path: if there's no Supabase auth cookie, block access immediately
-  try {
-    const all = typeof reqCookies.getAll === 'function' ? reqCookies.getAll() : [];
-    const hasSbAuth = all.some((c) => /^sb-.*-auth-token$/.test(c.name));
-    if (!hasSbAuth) {
-      url.pathname = '/login';
-      url.searchParams.set('redirectedFrom', nextUrl.pathname);
-      return NextResponse.redirect(url);
-    }
-  } catch (_) {
-    // ignore and continue with normal flow
+  // Fast path: check for Supabase auth cookie
+  const cookiesList = typeof reqCookies.getAll === 'function' ? reqCookies.getAll() : [];
+  const hasSbAuth = cookiesList.some((cookie) => /^sb-.*-auth-token$/.test(cookie.name));
+  if (!hasSbAuth) {
+    url.pathname = '/login';
+    url.searchParams.set('redirectedFrom', nextUrl.pathname);
+    return NextResponse.redirect(url);
   }
 
-  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supaKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supaUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supaKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // If env vars are missing, redirect to login without creating a client
   if (!supaUrl || !supaKey) {
     url.pathname = '/login';
     url.searchParams.set('redirectedFrom', nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 
-  const supabase = createServerClient(
-    supaUrl,
-    supaKey,
-    {
-      cookies: {
-        get(name) {
-          return reqCookies.get(name)?.value;
-        },
-        set(name, value, options) {
-          res.cookies.set({ name, value, ...options });
-        },
-        remove(name, options) {
-          res.cookies.set({ name, value: '', ...options });
-        },
-      },
+  const supabase = createServerClient(supaUrl, supaKey, {
+    cookies: {
+      get(name) { return reqCookies.get(name)?.value; },
+      set(name, value, options) { res.cookies.set({ name, value, ...options }); },
+      remove(name, options) { res.cookies.set({ name, value: '', ...options }); },
+    },
+  });
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Allowlist desde env (evita hardcode). Ej: ALLOWED_USER_IDS="uuid1,uuid2"
+    const allowed = (process.env.ALLOWED_USER_IDS || process.env.NEXT_PUBLIC_ALLOWED_USER_IDS || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (!user || (allowed.length > 0 && !allowed.includes(user.id))) {
+      url.pathname = '/login';
+      url.searchParams.set('redirectedFrom', nextUrl.pathname);
+      return NextResponse.redirect(url);
     }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  } catch (err) {
+    console.error('Middleware auth error:', err);
     url.pathname = '/login';
     url.searchParams.set('redirectedFrom', nextUrl.pathname);
     return NextResponse.redirect(url);
@@ -64,12 +60,11 @@ export async function middleware(req) {
 
 export const config = {
   matcher: [
-  // Protect explicit app routes; exclude login and static assets by omission
-  '/',
-  '/home/:path*',
-  '/fondos/:path*',
-  '/cliente/:path*',
-  '/movimientos/:path*',
-  '/dashboard/:path*',
+    '/',
+    '/home/:path*',
+    '/fondos/:path*',
+    '/cliente/:path*',
+    '/movimientos/:path*',
+    '/dashboard/:path*',
   ],
 };
