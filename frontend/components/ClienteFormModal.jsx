@@ -6,7 +6,67 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
   const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState({});
 
-  useEffect(() => { setValues(initial); setErrors({}); }, [initial, open]);
+  // Opciones dinámicas para "Perfil de riesgo"
+  const DEFAULT_RISK_OPTIONS = useMemo(() => ["Bajo", "Moderado", "Alto"], []);
+  const [riskOptions, setRiskOptions] = useState(DEFAULT_RISK_OPTIONS);
+  const [customRisk, setCustomRisk] = useState("");
+
+  // Período (con opción de agregar)
+  const DEFAULT_PERIOD_OPTIONS = useMemo(
+    () => ["Mensual", "Bimensual", "Trimestral", "6 meses", "Anual"],
+    []
+  );
+  const [periodOptions, setPeriodOptions] = useState(DEFAULT_PERIOD_OPTIONS);
+  const [customPeriod, setCustomPeriod] = useState("");
+
+  // Inputs para agregar múltiples bancos (nombre + alias en la misma fila)
+  const [newBankName, setNewBankName] = useState("");
+  const [newBankAlias, setNewBankAlias] = useState("");
+
+  // Edición inline de bancos
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [editBankName, setEditBankName] = useState("");
+  const [editBankAlias, setEditBankAlias] = useState("");
+
+  // Inicializar valores y mapear banco único -> lista de bancos
+  useEffect(() => {
+    const base = { ...(initial || {}) };
+    const banks = Array.isArray(base.banks)
+      ? base.banks
+          .map((b) => ({ name: (b?.name || "").trim(), alias: (b?.alias || "").trim() }))
+          .filter((b) => b.name !== "")
+      : base.bank
+      ? [{ name: String(base.bank).trim(), alias: (base.bankAlias || "").trim() }]
+      : [];
+    base.banks = banks;
+    // Compat: reflejar primer banco en bank/bankAlias
+    base.bank = banks[0]?.name || "";
+    base.bankAlias = banks[0]?.alias || "";
+    setValues(base);
+    setErrors({});
+    // reset edición
+    setEditingIdx(null);
+    setEditBankName("");
+    setEditBankAlias("");
+    setNewBankName("");
+    setNewBankAlias("");
+  }, [initial, open]);
+
+  // Incluir perfil inicial si es personalizado
+  useEffect(() => {
+    const rp = initial?.riskProfile;
+    if (rp && !DEFAULT_RISK_OPTIONS.includes(rp)) {
+      setRiskOptions((prev) => (prev.includes(rp) ? prev : [...prev, rp]));
+    }
+  }, [initial, DEFAULT_RISK_OPTIONS]);
+
+  // Incluir período inicial si es personalizado
+  useEffect(() => {
+    const p = initial?.period;
+    if (p && !DEFAULT_PERIOD_OPTIONS.includes(p)) {
+      setPeriodOptions((prev) => (prev.includes(p) ? prev : [...prev, p]));
+    }
+  }, [initial, DEFAULT_PERIOD_OPTIONS]);
 
   useEffect(() => {
     const onEsc = (e) => { if (e.key === "Escape" && open) onClose?.(); };
@@ -24,18 +84,19 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
 
     if (!values.name?.trim()) nextErrors.name = "El nombre es obligatorio.";
 
-    if (values.email?.trim()) {
-      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!re.test(values.email)) nextErrors.email = "Ingrese un email válido.";
+
+    // No dejar “modo agregar” sin confirmar
+    if (values.riskProfile === "__custom__") {
+      nextErrors.riskProfile = "Confirmá la nueva opción de riesgo o seleccioná una existente.";
+    }
+    if (values.period === "__period_custom__") {
+      nextErrors.period = "Confirmá el nuevo período o seleccioná uno existente.";
     }
 
-    if (values.cuit?.trim()) {
-      if (!isValidCuit?.(values.cuit)) nextErrors.cuit = "CUIT inválido. Debe tener 11 dígitos (ej. 20-12345678-3).";
-    }
-
-    if (isIntegral && values.salary !== "") {
-      const n = Number(String(values.salary).replace(",", "."));
-      if (Number.isNaN(n) || n < 0) nextErrors.salary = "Ingrese un sueldo válido (número mayor o igual a 0).";
+    // Arancel (%)
+    if (values.fee !== "" && values.fee !== undefined) {
+      const f = Number(String(values.fee).replace(",", "."));
+      if (Number.isNaN(f) || f < 0 || f > 100) nextErrors.fee = "Arancel inválido (0 a 100%).";
     }
 
     setErrors(nextErrors);
@@ -43,6 +104,123 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
 
     onSave?.(values);
   }
+
+  // Perfil de riesgo
+  const onRiskChange = (e) => {
+    const val = e.target.value;
+    if (val === "__custom__") {
+      setCustomRisk("");
+      setValues((v) => ({ ...v, riskProfile: "__custom__" }));
+    } else {
+      setValues((v) => ({ ...v, riskProfile: val }));
+    }
+  };
+
+  const addCustomRisk = () => {
+    const label = (customRisk || "").trim();
+    if (!label) return;
+    setRiskOptions((prev) => (prev.includes(label) ? prev : [...prev, label]));
+    setValues((v) => ({ ...v, riskProfile: label }));
+    setCustomRisk("");
+    setErrors((prev) => {
+      const { riskProfile, ...rest } = prev || {};
+      return rest;
+    });
+  };
+
+  // Período
+  const onPeriodChange = (e) => {
+    const val = e.target.value;
+    if (val === "__period_custom__") {
+      setCustomPeriod("");
+      setValues((v) => ({ ...v, period: "__period_custom__" }));
+    } else {
+      setValues((v) => ({ ...v, period: val }));
+    }
+  };
+
+  const addCustomPeriod = () => {
+    const label = (customPeriod || "").trim();
+    if (!label) return;
+    setPeriodOptions((prev) => (prev.includes(label) ? prev : [...prev, label]));
+    setValues((v) => ({ ...v, period: label }));
+    setCustomPeriod("");
+    setErrors((prev) => {
+      const { period, ...rest } = prev || {};
+      return rest;
+    });
+  };
+
+  // Bancos (múltiples)
+  const addBank = () => {
+    const name = newBankName.trim();
+    const alias = newBankAlias.trim();
+    if (!name) return;
+    setValues((v) => {
+      const current = Array.isArray(v.banks) ? v.banks : [];
+      const exists = current.some(
+        (b) =>
+          (b.name || "").trim().toLowerCase() === name.toLowerCase() &&
+          (b.alias || "").trim().toLowerCase() === alias.toLowerCase()
+      );
+      const banks = exists ? current : [...current, { name, alias }];
+      const first = banks[0];
+      return { ...v, banks, bank: first?.name || "", bankAlias: first?.alias || "" };
+    });
+    setNewBankName("");
+    setNewBankAlias("");
+  };
+
+  const removeBank = (idx) => {
+    setValues((v) => {
+      const banks = (v.banks || []).filter((_, i) => i !== idx);
+      const first = banks[0];
+      return { ...v, banks, bank: first?.name || "", bankAlias: first?.alias || "" };
+    });
+    if (editingIdx === idx) {
+      setEditingIdx(null);
+      setEditBankName("");
+      setEditBankAlias("");
+    }
+  };
+
+  const updateBank = (idx, patch) => {
+    setValues((v) => {
+      const banks = (v.banks || []).map((b, i) => (i === idx ? { ...b, ...patch } : b));
+      const first = banks[0];
+      return { ...v, banks, bank: first?.name || "", bankAlias: first?.alias || "" };
+    });
+  };
+
+  const addBankOnEnter = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addBank();
+    }
+  };
+
+  const startEditBank = (idx) => {
+    const b = values.banks?.[idx];
+    if (!b) return;
+    setEditingIdx(idx);
+    setEditBankName(b.name || "");
+    setEditBankAlias(b.alias || "");
+  };
+
+  const saveEditBank = () => {
+    const name = (editBankName || "").trim();
+    if (!name) return;
+    updateBank(editingIdx, { name, alias: (editBankAlias || "").trim() });
+    setEditingIdx(null);
+    setEditBankName("");
+    setEditBankAlias("");
+  };
+
+  const cancelEditBank = () => {
+    setEditingIdx(null);
+    setEditBankName("");
+    setEditBankAlias("");
+  };
 
   return (
     <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="cliente-modal-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
@@ -72,34 +250,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               {errors.name && <span className={styles.error}>{errors.name}</span>}
             </div>
 
-            {/* Fecha/hora alta */}
-            <div className={styles.formGroup}>
-              <label>Fecha y hora de alta</label>
-              <div className={styles.inputWithIcon}>
-                <i className={`fa-regular fa-calendar-plus ${styles.inputIcon}`}></i>
-                <input
-                  type="datetime-local"
-                  value={values.joinedLocal}
-                  onChange={(e) => setValues({ ...values, joinedLocal: e.target.value })}
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div className={styles.formGroup}>
-              <label>Email</label>
-              <div className={styles.inputWithIcon}>
-                <i className={`fa-regular fa-envelope ${styles.inputIcon}`}></i>
-                <input
-                  type="email"
-                  value={values.email}
-                  onChange={(e) => setValues({ ...values, email: e.target.value })}
-                  placeholder=""
-                />
-              </div>
-              {errors.email && <span className={styles.error}>{errors.email}</span>}
-            </div>
-
             {/* Teléfono */}
             <div className={styles.formGroup}>
               <label>Teléfono</label>
@@ -114,51 +264,15 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               </div>
             </div>
 
-            {/* CUIT */}
+            {/* Fecha de alta */}
             <div className={styles.formGroup}>
-              <label>CUIT</label>
+              <label>Fecha de alta</label>
               <div className={styles.inputWithIcon}>
-                <i className={`fa-regular fa-id-card ${styles.inputIcon}`}></i>
+                <i className={`fa-regular fa-calendar ${styles.inputIcon}`}></i>
                 <input
-                  type="text"
-                  value={values.cuit}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    // Formateo suave: cuando tiene 11 dígitos, mostramos xx-xxxxxxxx-x
-                    const digits = v.replace(/\D/g, "");
-                    setValues({ ...values, cuit: digits.length === 11 ? formatCuit(digits) : v });
-                  }}
-                  inputMode="numeric"
-                  placeholder=""
-                />
-              </div>
-              {errors.cuit && <span className={styles.error}>{errors.cuit}</span>}
-            </div>
-
-            {/* Dirección */}
-            <div className={styles.formGroup}>
-              <label>Dirección</label>
-              <div className={styles.inputWithIcon}>
-                <i className={`fa-solid fa-location-dot ${styles.inputIcon}`}></i>
-                <input
-                  type="text"
-                  value={values.address}
-                  onChange={(e) => setValues({ ...values, address: e.target.value })}
-                  placeholder=""
-                />
-              </div>
-            </div>
-
-            {/* Datos financieros */}
-            <div className={styles.formGroup}>
-              <label>Datos financieros</label>
-              <div className={styles.inputWithIcon}>
-                <i className={`fa-solid fa-coins ${styles.inputIcon}`}></i>
-                <input
-                  type="text"
-                  value={values.financialData}
-                  onChange={(e) => setValues({ ...values, financialData: e.target.value })}
-                  placeholder=""
+                  type="date"
+                  value={values.joinedLocal}
+                  onChange={(e) => setValues({ ...values, joinedLocal: e.target.value })}
                 />
               </div>
             </div>
@@ -169,17 +283,86 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               <div className={styles.inputWithIcon}>
                 <i className={`fa-solid fa-gauge-high ${styles.inputIcon}`}></i>
                 <select
-                  value={values.riskProfile}
-                  onChange={(e) => setValues({ ...values, riskProfile: e.target.value })}
+                  value={values.riskProfile === "__custom__" ? "__custom__" : (values.riskProfile ?? "Moderado")}
+                  onChange={onRiskChange}
                 >
-                  <option value="Bajo">Bajo</option>
-                  <option value="Moderado">Moderado</option>
-                  <option value="Alto">Alto</option>
+                  {riskOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                  <option value="__custom__">+ Agregar opción…</option>
                 </select>
               </div>
+              {values.riskProfile === "__custom__" && (
+                <div className={styles.inputWithIcon} style={{ marginTop: 8 }}>
+                  <i className={`fa-solid fa-plus ${styles.inputIcon}`}></i>
+                  <input
+                    type="text"
+                    placeholder="Nueva opción de riesgo"
+                    value={customRisk}
+                    onChange={(e) => setCustomRisk(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomRisk(); } }}
+                  />
+                  <button type="button" className="btn-save" onClick={addCustomRisk} style={{ marginLeft: 8 }}>
+                    Agregar
+                  </button>
+                </div>
+              )}
+              {errors.riskProfile && <span className={styles.error}>{errors.riskProfile}</span>}
             </div>
 
-            {/* Tipo de servicio */}
+            {/* Período */}
+            <div className={styles.formGroup}>
+              <label>Período</label>
+              <div className={styles.inputWithIcon}>
+                <i className={`fa-regular fa-calendar ${styles.inputIcon}`}></i>
+                <select
+                  value={values.period === "__period_custom__" ? "__period_custom__" : (values.period ?? "Mensual")}
+                  onChange={onPeriodChange}
+                >
+                  {periodOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                  <option value="__period_custom__">+ Agregar opción…</option>
+                </select>
+              </div>
+              {values.period === "__period_custom__" && (
+                <div className={styles.inputWithIcon} style={{ marginTop: 8 }}>
+                  <i className={`fa-solid fa-plus ${styles.inputIcon}`}></i>
+                  <input
+                    type="text"
+                    placeholder="Nuevo período"
+                    value={customPeriod}
+                    onChange={(e) => setCustomPeriod(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomPeriod(); } }}
+                  />
+                  <button type="button" className="btn-save" onClick={addCustomPeriod} style={{ marginLeft: 8 }}>
+                    Agregar
+                  </button>
+                </div>
+              )}
+              {errors.period && <span className={styles.error}>{errors.period}</span>}
+            </div>
+
+            {/* Arancel (%) */}
+            <div className={styles.formGroup}>
+              <label>Arancel (%)</label>
+              <div className={styles.inputWithIcon}>
+                <i className={`fa-solid fa-percent ${styles.inputIcon}`}></i>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={values.fee ?? ""}
+                  onChange={(e) => setValues({ ...values, fee: e.target.value })}
+                  placeholder=""
+                />
+              </div>
+              <small className={styles.hint}>Porcentaje a cobrar al cliente (0–100%)</small>
+              {errors.fee && <span className={styles.error}>{errors.fee}</span>}
+            </div>
+
+            {/* Tipo de servicio (arriba de Bancos) */}
             <div className={styles.formGroup}>
               <label>Tipo de servicio</label>
               <div className={styles.inputWithIcon}>
@@ -194,22 +377,153 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               </div>
             </div>
 
-            {/* Sueldo (solo Integral) */}
-            <div className={`${styles.formGroup} ${!isIntegral ? styles.hidden : ""}`}>
-              <label>Sueldo (mensual)</label>
-              <div className={styles.inputWithIcon}>
-                <i className={`fa-solid fa-money-bill-wave ${styles.inputIcon}`}></i>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={values.salary}
-                  onChange={(e) => setValues({ ...values, salary: e.target.value })}
-                  placeholder=""
-                />
+            {/* Bancos (múltiples) + Alias por banco (fila de alta + lista editable) */}
+            <div className={styles.formGroup}>
+              <label>Bancos</label>
+
+              {/* Alta: Nombre + Alias + botón "+" en una sola fila */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center" }}>
+                <div className={styles.inputWithIcon}>
+                  <i className={`fa-solid fa-building-columns ${styles.inputIcon}`}></i>
+                  <input
+                    type="text"
+                    placeholder="Nombre del banco"
+                    value={newBankName}
+                    onChange={(e) => setNewBankName(e.target.value)}
+                    onKeyDown={addBankOnEnter}
+                  />
+                </div>
+                <div className={styles.inputWithIcon}>
+                  <i className={`fa-solid fa-id-badge ${styles.inputIcon}`}></i>
+                  <input
+                    type="text"
+                    placeholder="Alias (opcional)"
+                    value={newBankAlias}
+                    onChange={(e) => setNewBankAlias(e.target.value)}
+                    onKeyDown={addBankOnEnter}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn-save"
+                  onClick={addBank}
+                  aria-label="Agregar banco"
+                  title="Agregar banco"
+                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 40 }}
+                >
+                  <i className="fa-solid fa-plus"></i>
+                </button>
               </div>
-              <small className={styles.hint}>Sueldo neto mensual (opcional)</small>
-              {errors.salary && <span className={styles.error}>{errors.salary}</span>}
+
+              {/* Lista en tarjetas compactas */}
+              {(values.banks && values.banks.length > 0) && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {values.banks.map((b, idx) => {
+                    const isEditing = editingIdx === idx;
+                    return (
+                      <div
+                        key={`${b.name}-${idx}`}
+                        style={{
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 8,
+                          padding: 10,
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto",
+                          gap: 8,
+                          alignItems: "center",
+                          background: "#fff"
+                        }}
+                      >
+                        <div>
+                          {!isEditing ? (
+                            <>
+                              <div style={{ fontWeight: 600 }}>{b.name || "-"}</div>
+                              {b.alias ? (
+                                <div className={styles.hint} style={{ marginTop: 2 }}>Alias: {b.alias}</div>
+                              ) : (
+                                <div className={styles.hint} style={{ marginTop: 2, opacity: 0.8 }}>Sin alias</div>
+                              )}
+                            </>
+                          ) : (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                              <div className={styles.inputWithIcon}>
+                                <i className={`fa-solid fa-building-columns ${styles.inputIcon}`}></i>
+                                <input
+                                  type="text"
+                                  value={editBankName}
+                                  onChange={(e) => setEditBankName(e.target.value)}
+                                  placeholder="Nombre del banco"
+                                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveEditBank(); } }}
+                                />
+                              </div>
+                              <div className={styles.inputWithIcon}>
+                                <i className={`fa-solid fa-id-badge ${styles.inputIcon}`}></i>
+                                <input
+                                  type="text"
+                                  value={editBankAlias}
+                                  onChange={(e) => setEditBankAlias(e.target.value)}
+                                  placeholder="Alias (opcional)"
+                                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveEditBank(); } }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {!isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-save"
+                                onClick={() => startEditBank(idx)}
+                                aria-label="Editar banco"
+                                title="Editar banco"
+                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                              >
+                                <i className="fa-solid fa-pen"></i>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-close"
+                                onClick={() => removeBank(idx)}
+                                aria-label="Eliminar banco"
+                                title="Eliminar banco"
+                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                              >
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-save"
+                                onClick={saveEditBank}
+                                aria-label="Guardar cambios"
+                                title="Guardar cambios"
+                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                              >
+                                <i className="fa-solid fa-check"></i>
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-close"
+                                onClick={cancelEditBank}
+                                aria-label="Cancelar"
+                                title="Cancelar"
+                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Comentarios */}

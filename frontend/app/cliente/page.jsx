@@ -1,75 +1,34 @@
 "use client";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import Sidebar from "../../components/Sidebar";
 import ClienteCard from "../../components/ClienteCard";
 import ClienteFormModal from "../../components/ClienteFormModal";
 import ClienteViewModal from "../../components/ClienteViewModal";
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
 import styles from "../../styles/clientes.module.css";
-import { useEffect } from 'react';
 
-// ——— Utils (comparten misma lógica que tu JS original)
+// Utils
 const onlyDigits = (s = "") => s.replace(/\D/g, "");
-const fmtARS = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 2,
-});
+const fmtARS = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 });
 
 function normalize(s = "") {
-  return s
-    .toString()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  return s.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
-
 function formatCuit(digits) {
   const d = onlyDigits(digits);
   if (d.length !== 11) return digits || "";
   return `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}`;
 }
-
-function isValidCuit(raw = "") {
-  const d = onlyDigits(raw);
-  if (d.length !== 11) return false;
-  const mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  const sum = mult.reduce((acc, m, i) => acc + m * Number(d[i]), 0);
-  let dv = 11 - (sum % 11);
-  if (dv === 11) dv = 0;
-  if (dv === 10) dv = 9;
-  return dv === Number(d[10]);
-}
-
 function pad2(n) { return n.toString().padStart(2, "0"); }
-function nowLocalForInput() {
+function nowLocalDate() {
   const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
-function isoFromLocalInput(localStr) {
-  if (!localStr) return new Date().toISOString();
-  const d = new Date(localStr);
-  if (Number.isNaN(d.getTime())) {
-    const [date, time] = localStr.split("T");
-    const [y, m, day] = date.split("-").map(Number);
-    const [h, min] = (time || "00:00").split(":").map(Number);
-    return new Date(y, (m || 1) - 1, day || 1, h || 0, min || 0, 0, 0).toISOString();
-  }
-  return d.toISOString();
-}
-function inputFromISO(isoStr) {
-  if (!isoStr) return nowLocalForInput();
-  const d = new Date(isoStr);
-  if (Number.isNaN(d.getTime())) return nowLocalForInput();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-function formatEsDateTime(isoStr = "") {
+function formatEsDate(isoStr = "") {
   if (!isoStr) return "";
   const d = new Date(isoStr);
   if (Number.isNaN(d.getTime())) return "";
-  const fecha = d.toLocaleDateString("es-AR", { year: "numeric", month: "2-digit", day: "2-digit" });
-  const hora = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-  return `${fecha} ${hora}`;
+  return d.toLocaleDateString("es-AR", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 // ——— Página
@@ -78,19 +37,42 @@ export default function ClientesPage() {
   useEffect(() => {
     try { const saved = localStorage.getItem('sidebarCollapsed'); if (saved!==null) setCollapsed(JSON.parse(saved)); } catch {}
   }, []);
-  // Estado base (demo)
-  const [clients, setClients] = useState([
-    { id: 1, name: "Juancito Pérez", cuit: "20-12345678-3", email: "juan@example.com", phone: "+54 9 11 1234-5678", riskProfile: "Moderado", serviceType: "Integral", joinedAt: new Date().toISOString() },
-    { id: 2, name: "Ana Gómez", cuit: "27-00000000-5", email: "ana@example.com", phone: "+54 9 11 9876-5432", riskProfile: "Bajo", serviceType: "Cartera Administrada", joinedAt: new Date().toISOString() },
-  ]);
 
+  const [clients, setClients] = useState([]);
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null); // objeto cliente o null
+  const [editing, setEditing] = useState(null);
   const [showView, setShowView] = useState(false);
   const [viewing, setViewing] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+
+  // Cargar desde API
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/cliente", { cache: "no-store" });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(payload?.error || "Error al cargar clientes");
+        const list = Array.isArray(payload.data) ? payload.data : [];
+        // Completar con campos usados por UI y compat con banco/alias/comentario
+        setClients(list.map((c) => {
+          const banks =
+            Array.isArray(c.banks) ? c.banks :
+            (c.bank ? [{ name: c.bank, alias: c.alias || c.bankAlias || "" }] : []);
+          return {
+            ...c,
+            banks,
+            comments: c.comments || c.comentario || "",
+            joinedAt: c.joinedAt || new Date().toISOString(), // solo para vista de fecha
+          };
+        }));
+      } catch (e) {
+        console.error(e);
+        setClients([]);
+      }
+    })();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim();
@@ -110,45 +92,125 @@ export default function ClientesPage() {
   const openView = useCallback((c) => { setViewing(c); setShowView(true); }, []);
   const askDelete = useCallback((c) => { setPendingDelete(c); setShowConfirm(true); }, []);
 
-  const handleSave = useCallback((values) => {
+  const handleSave = useCallback(async (values) => {
     const {
-      name, email, phone, cuit: cuitRaw, address, financialData,
-      riskProfile, serviceType, salary, joinedLocal, comments,
+      name, phone, riskProfile, serviceType,
+      period, fee, banks, comments,
+      bank, bankAlias, // compat si vinieran
     } = values;
 
-    const cuit = (() => {
-      const digits = onlyDigits(cuitRaw || "");
-      return digits.length === 11 ? formatCuit(digits) : "";
-    })();
-    const joinedAt = isoFromLocalInput(joinedLocal || nowLocalForInput());
+    // Normalizar fee a número
+    let feeNum = undefined;
+    if (fee !== "" && fee !== undefined && fee !== null) {
+      const f = Number(String(fee).replace(",", "."));
+      if (!Number.isNaN(f)) feeNum = f;
+    }
 
-    setClients((prev) => {
-      if (editing) {
-        return prev.map((p) => (p.id === editing.id ? { ...p, name, email, phone, cuit, address, financialData, riskProfile, serviceType, salary, joinedAt, comments } : p));
+    // Tomar primer banco para persistir en columnas banco/alias
+    const first = Array.isArray(banks) && banks.length ? banks[0] : null;
+
+    const payload = {
+      nombre: name,
+      tipo_servicio: serviceType || null,
+      celular: phone || null,
+      banco: first?.name || bank || null,
+      alias: first?.alias || bankAlias || null,
+      arancel: feeNum ?? null,
+      periodo: period || null,
+      perfil: riskProfile || null,
+      comentario: comments || null,
+    };
+
+    try {
+      if (editing?.id) {
+        const res = await fetch("/api/cliente", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editing.id, ...payload }),
+        });
+        const out = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(out?.error || "Error al editar cliente");
+        const updated = out.data;
+        setClients((prev) =>
+          prev.map((p) =>
+            p.id === editing.id
+              ? {
+                  ...p,
+                  ...updated,
+                  // asegurar banks/comments en el objeto actualizado
+                  banks: Array.isArray(updated.banks)
+                    ? updated.banks
+                    : (updated.bank ? [{ name: updated.bank, alias: updated.alias || "" }] : p.banks),
+                  comments: updated.comments || updated.comentario || p.comments || "",
+                }
+              : p
+          )
+        );
+      } else {
+        const res = await fetch("/api/cliente", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const out = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(out?.error || "Error al crear cliente");
+        const created = out.data;
+        setClients((prev) => [
+          ...prev,
+          {
+            ...created,
+            banks: Array.isArray(created.banks)
+              ? created.banks
+              : (created.bank ? [{ name: created.bank, alias: created.alias || "" }] : []),
+            comments: created.comments || created.comentario || "",
+            joinedAt: new Date().toISOString(),
+          },
+        ]);
       }
-      const nextId = prev.length ? Math.max(...prev.map((x) => x.id)) + 1 : 1;
-      return [...prev, { id: nextId, name, email, phone, cuit, address, financialData, riskProfile, serviceType, salary, joinedAt, comments }];
-    });
-
-    setShowForm(false);
-    setEditing(null);
+      setShowForm(false);
+      setEditing(null);
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "No se pudo guardar el cliente");
+    }
   }, [editing]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     if (!pendingDelete) return;
-    setClients((prev) => prev.filter((x) => x.id !== pendingDelete.id));
-    setShowConfirm(false);
-    setPendingDelete(null);
+    try {
+      const res = await fetch("/api/cliente", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: pendingDelete.id }),
+      });
+      if (!res.ok && res.status !== 204) {
+        const out = await res.json().catch(() => null);
+        throw new Error(out?.error || "Error al eliminar cliente");
+      }
+      setClients((prev) => prev.filter((x) => x.id !== pendingDelete.id));
+      setShowConfirm(false);
+      setPendingDelete(null);
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "No se pudo eliminar el cliente");
+    }
   }, [pendingDelete]);
 
   return (
     <>
+      <Sidebar
+        collapsed={collapsed}
+        toggleSidebar={() => {
+          setCollapsed((c) => {
+            const n = !c;
+            try { localStorage.setItem("sidebarCollapsed", JSON.stringify(n)); } catch {}
+            return n;
+          });
+        }}
+      />
 
-      <Sidebar collapsed={collapsed} toggleSidebar={() => {
-        setCollapsed(c => { const n=!c; try { localStorage.setItem('sidebarCollapsed', JSON.stringify(n)); } catch {}; return n; });
-      }} />
-      <div className={`main-content ${collapsed ? 'expanded' : ''}`} style={{ padding: 24 }}>
-        <main style={{ background:'#fff', padding:18, borderRadius:12 }}>
+      <div className={`main-content ${collapsed ? "expanded" : ""}`} style={{ padding: 24 }}>
+        <main style={{ background: "#fff", padding: 18, borderRadius: 12 }}>
           {/* Buscador + botón alta */}
           <div className={styles.searchBar}>
             <input
@@ -168,7 +230,9 @@ export default function ClientesPage() {
             <h2>Lista de Clientes</h2>
 
             {filtered.length === 0 ? (
-              <div className={styles.empty}> {query ? "No hay clientes que coincidan." : "Sin clientes aún."} </div>
+              <div className={styles.empty}>
+                {query ? "No hay clientes que coincidan." : "Sin clientes aún."}
+              </div>
             ) : (
               <div className={styles.list}>
                 {filtered.map((c) => (
@@ -193,30 +257,34 @@ export default function ClientesPage() {
         onSave={handleSave}
         initial={editing ? {
           name: editing.name || "",
-          email: editing.email || "",
           phone: editing.phone || "",
-          cuit: editing.cuit || "",
-          address: editing.address || "",
-          financialData: editing.financialData || "",
           riskProfile: editing.riskProfile || "Moderado",
+          period: editing.period || "Mensual",
+          fee: typeof editing.fee === "number" ? editing.fee : (editing.fee || ""),
           serviceType: editing.serviceType || "Integral",
-          salary: typeof editing.salary === "number" ? editing.salary : (editing.salary || ""),
-          joinedLocal: inputFromISO(editing.joinedAt),
-          comments: editing.comments || "",
+          // Prefiere lista de bancos (name+alias); si no, mapear desde bank/alias
+          banks: Array.isArray(editing.banks)
+            ? editing.banks
+            : (editing.bank ? [{ name: editing.bank, alias: editing.alias || editing.bankAlias || "" }] : []),
+          comments: editing.comments || editing.comentario || "",
+          salary: editing.salary ?? "",
+          joinedLocal: nowLocalDate(),
         } : {
           name: "",
-          email: "",
           phone: "",
-          cuit: "",
-          address: "",
-          financialData: "",
           riskProfile: "Moderado",
+          period: "Mensual",
+          fee: "",
           serviceType: "Integral",
-          salary: "",
-          joinedLocal: nowLocalForInput(),
+          banks: [],
           comments: "",
+          salary: "",
+          joinedLocal: nowLocalDate(),
         }}
-        helpers={{ isValidCuit, formatCuit }}
+        helpers={{
+          isValidCuit: () => true,
+          formatCuit: (s) => s,
+        }}
       />
 
       <ClienteViewModal
@@ -224,7 +292,7 @@ export default function ClientesPage() {
         onClose={() => { setShowView(false); setViewing(null); }}
         cliente={viewing}
         fmtARS={fmtARS}
-        formatEsDateTime={formatEsDateTime}
+        formatEsDate={formatEsDate}
       />
 
       <ConfirmDeleteModal
