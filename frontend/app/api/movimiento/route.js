@@ -12,7 +12,6 @@ const getSb = () => {
   return createClient(url, key, { auth: { persistSession: false } });
 };
 
-// Joins para nombres reales
 const SELECT_BASE =
   "id_movimiento,cliente_id,fondo_id,fecha_alta,precio_usd,tipo_mov,nominal,tipo_especie_id," +
   "tipo_especie:tipo_especie_id(id_tipo_especie,nombre)," +
@@ -90,6 +89,19 @@ const updateSchema = z.object({
 
 const deleteSchema = z.object({ id: z.coerce.number().int().positive() });
 
+// Esquema para upsert de precios desde CSV (sin moneda)
+const upsertPreciosSchema = z.object({
+  action: z.literal("upsertPrecios"),
+  fecha: z.union([ymd, z.string().datetime()]),
+  fuente: z.string().optional(),
+  items: z.array(
+    z.object({
+      instrumento: z.string().min(1),
+      precio: z.coerce.number().positive(),
+    })
+  ).min(1),
+});
+
 async function assertFondoBelongs(sb, fondoId, clienteId) {
   const { data, error } = await sb
     .from("fondo")
@@ -130,7 +142,6 @@ async function resolveTipoEspecieId(sb, maybeId, maybeName) {
   return Number(ins.data.id_tipo_especie);
 }
 
-// Disponible = compras - ventas hasta fecha (inclusive)
 async function computeDisponible(sb, cliente_id, fondo_id, tipo_especie_id, fecha_alta) {
   const end = fecha_alta ? toIsoEndOfDay(fecha_alta) : null;
   let q = sb
@@ -208,7 +219,55 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = createSchema.safeParse(body);
+
+    // Acción: upsert de precios desde CSV (sin moneda)
+    if (body?.action === "upsertPrecios") {
+      const parsed = upsertPreciosSchema.safeParse(body);
+      if (!parsed.success) {
+        const errText = parsed.error?.issues?.map(i => i.message).join("; ") || "Datos inválidos";
+        return NextResponse.json({ error: errText, details: parsed.error.flatten() }, { status: 400 });
+      }
+      const sb = getSb();
+      const fechaIso = toIsoStartOfDay(parsed.data.fecha) || new Date().toISOString();
+
+      const rows = [];
+      for (const it of parsed.data.items) {
+        const tipoEspecieId = await resolveTipoEspecieId(sb, null, it.instrumento);
+        rows.push({
+          tipo_especie_id: tipoEspecieId,
+          fecha: fechaIso,
+          precio: it.precio,
+        });
+      }
+
+      // Upsert por (tipo_especie_id, fecha)
+      let up = await sb
+        .from("precio_especie")
+        .upsert(rows, { onConflict: "tipo_especie_id,fecha" })
+        .select("id_precio_especie,tipo_especie_id,fecha,precio");
+      if (up.error?.message?.toLowerCase?.().includes("on conflict")) {
+        up = await sb
+          .from("precio_especie")
+          .insert(rows)
+          .select("id_precio_especie,tipo_especie_id,fecha,precio");
+      }
+      if (up.error) throw up.error;
+
+      return NextResponse.json({ data: up.data || rows, saved: rows.length }, { status: 201 });
+    }
+
+    // Alta de movimiento (sin cambios)
+    const parsed = z.object({
+      cliente_id: z.coerce.number().int().positive(),
+      fondo_id: z.coerce.number().int().positive(),
+      fecha_alta: z.union([ymd, z.string().datetime().optional()]).optional(),
+      tipo_mov: z.enum(["compra", "venta"]),
+      nominal: z.coerce.number().int().positive(),
+      precio_usd: z.coerce.number().optional().nullable(),
+      tipo_especie_id: z.coerce.number().int().positive().optional(),
+      especie: z.string().min(1).optional(),
+    }).safeParse(body);
+
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
@@ -229,7 +288,6 @@ export async function POST(req) {
     await assertFondoBelongs(sb, fondo_id, cliente_id);
     const especieId = await resolveTipoEspecieId(sb, tipo_especie_id, especie);
 
-    // Validación de stock en ventas
     if (tipo_mov === "venta") {
       const disponible = await computeDisponible(sb, cliente_id, fondo_id, especieId, fecha_alta);
       if (nominal > disponible) {
@@ -265,11 +323,22 @@ export async function POST(req) {
   }
 }
 
-// PATCH (sin validación de stock compleja para mantener simple)
+// PATCH (sin cambios)
 export async function PATCH(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = updateSchema.safeParse(body);
+    const parsed = z.object({
+      id: z.coerce.number().int().positive(),
+      cliente_id: z.coerce.number().int().positive().optional(),
+      fondo_id: z.coerce.number().int().positive().optional(),
+      fecha_alta: z.union([ymd, z.string().datetime()]).optional(),
+      tipo_mov: z.enum(["compra", "venta"]).optional(),
+      nominal: z.coerce.number().int().positive().optional(),
+      precio_usd: z.coerce.number().optional().nullable(),
+      tipo_especie_id: z.coerce.number().int().positive().optional(),
+      especie: z.string().min(1).optional(),
+    }).safeParse(body);
+
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
@@ -326,10 +395,11 @@ export async function PATCH(req) {
   }
 }
 
+// DELETE (sin cambios)
 export async function DELETE(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = deleteSchema.safeParse(body);
+    const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Falta id válido" }, { status: 400 });
     }

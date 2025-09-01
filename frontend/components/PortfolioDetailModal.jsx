@@ -1,56 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from "react";
 
-const PortfolioDetailModal = ({ clients, context, onClose, onSave, onOpenSpeciesHistory }) => {
-  const [fundFilter, setFundFilter] = useState('');
-  const [editedFunds, setEditedFunds] = useState([]);
-
-  const client = clients.find((c) => c.id === context.clientId);
-  const portfolio = client?.portfolios.find((p) => p.id === context.portfolioId);
-
-  // Cerrar con Escape
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose?.();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    if (portfolio) {
-      setEditedFunds(portfolio.funds.map((f) => ({ ...f })));
-    }
-  }, [portfolio]);
-
-  const filteredFunds = editedFunds.filter(
-    (f) => !fundFilter || f.name.toLowerCase().includes(fundFilter.toLowerCase())
+const PortfolioDetailModal = ({
+  clients,
+  context,         // { clientId, portfolioId }
+  onClose,
+  onSave,
+  onOpenSpeciesHistory,
+  onDelete,         // NUEVO: eliminar cartera
+}) => {
+  const client = useMemo(
+    () => (clients || []).find((c) => c.id === context?.clientId),
+    [clients, context]
   );
-  const total = editedFunds.reduce((s, f) => s + (Number(f.nominal) || 0), 0);
+  const portfolio = useMemo(
+    () => client?.portfolios?.find((p) => p.id === context?.portfolioId),
+    [client, context]
+  );
 
-  const handleNominalChange = (fundId, value) => {
-    const val = parseFloat(value.replace(/\s/g, '').replace(/,/g, ''));
-    if (isNaN(val)) return;
-    setEditedFunds((prev) => prev.map((f) => (f.id === fundId ? { ...f, nominal: val } : f)));
+  const [fundFilter, setFundFilter] = useState("");
+  const [editedFunds, setEditedFunds] = useState(() =>
+    (portfolio?.funds || []).map((f) => ({ ...f }))
+  );
+
+  const filteredFunds = useMemo(() => {
+    const q = (fundFilter || "").trim().toLowerCase();
+    const list = editedFunds;
+    if (!q) return list;
+    return list.filter((f) => String(f.name || "").toLowerCase().includes(q));
+  }, [editedFunds, fundFilter]);
+
+  const total = useMemo(
+    () => (editedFunds || []).reduce((s, f) => s + (Number(f.nominal) || 0), 0),
+    [editedFunds]
+  );
+
+  const hasInvalid =
+    !client ||
+    !portfolio ||
+    editedFunds.some(
+      (f) => !Number.isFinite(Number(f.nominal)) || Number(f.nominal) < 0
+    );
+
+  const handleSave = async () => {
+    if (hasInvalid) return;
+    // Actualmente no persistimos nominal editado desde acá (se ajusta por movimientos).
+    // Mantenemos botón Guardar para coherencia visual, delegando en onSave (edita plazo).
+    await onSave?.({
+      id: portfolio?.id,
+      periodMonths: portfolio?.periodMonths ?? null,
+    });
   };
 
-  const handleSave = () => {
-    const cleaned = editedFunds
-      .map((f) => ({ ...f, nominal: Number(f.nominal) || 0 }))
-      .filter((f) => f.nominal > 0);
-    const updatedPortfolio = { ...portfolio, funds: cleaned };
-    onSave(updatedPortfolio);
-  };
-
-  const hasInvalid = !client || !portfolio || editedFunds.some((f) => !Number.isFinite(Number(f.nominal)) || Number(f.nominal) < 0);
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!hasInvalid) handleSave();
   };
 
-  // Cerrar al hacer click fuera del modal (overlay)
   const handleOverlayMouseDown = (e) => {
     if (e.target === e.currentTarget) onClose?.();
   };
@@ -58,7 +63,7 @@ const PortfolioDetailModal = ({ clients, context, onClose, onSave, onOpenSpecies
   return (
     <div
       className="modal"
-      style={{ display: 'flex' }}
+      style={{ display: "flex" }}
       aria-hidden="false"
       role="dialog"
       aria-modal="true"
@@ -67,13 +72,29 @@ const PortfolioDetailModal = ({ clients, context, onClose, onSave, onOpenSpecies
     >
       <div className="modal-dialog">
         <form onSubmit={handleSubmit}>
-          <header className="modal-header">
+          <header className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 id="portfolio-detail-title">
               Detalle de cartera <span style={{ fontWeight: 600 }}>{`${client?.name} — ${portfolio?.name}`}</span>
             </h2>
-            <button type="button" className="modal-close" onClick={onClose} aria-label="Cerrar">
-              &times;
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn"
+                title="Eliminar cartera"
+                onClick={onDelete}
+                style={{ color: "#a33" }}
+              >
+                <i className="fas fa-trash"></i>
+              </button>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={onClose}
+                aria-label="Cerrar"
+              >
+                &times;
+              </button>
+            </div>
           </header>
 
           <div className="modal-body">
@@ -113,7 +134,7 @@ const PortfolioDetailModal = ({ clients, context, onClose, onSave, onOpenSpecies
                         <td
                           className="fund-name-link"
                           style={{ cursor: 'pointer', color: '#0f1720', fontWeight: 600 }}
-                          onClick={() => onOpenSpeciesHistory(f.name)}
+                          onClick={() => onOpenSpeciesHistory?.(f.name)}
                         >
                           {f.name}
                         </td>
@@ -121,11 +142,16 @@ const PortfolioDetailModal = ({ clients, context, onClose, onSave, onOpenSpecies
                           <input
                             style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e6edf3' }}
                             value={(Number(f.nominal) || 0).toFixed(2)}
-                            onChange={(e) => handleNominalChange(f.id, e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditedFunds((prev) =>
+                                prev.map((x) => (x.id === f.id ? { ...x, nominal: Number(val) } : x))
+                              );
+                            }}
                           />
                         </td>
-                        <td>{((f.monthlyReturn || 0) * 100).toFixed(2)}%</td>
-                        <td>{((f.totalReturn || 0) * 100).toFixed(2)}%</td>
+                        <td className="muted">—</td>
+                        <td className="muted">—</td>
                       </tr>
                     ))
                   )}
@@ -139,7 +165,7 @@ const PortfolioDetailModal = ({ clients, context, onClose, onSave, onOpenSpecies
               <i className="fas fa-check"></i> Guardar
             </button>
             <button type="button" className="btn-close" onClick={onClose}>
-              <i className="fas fa-times"></i> Cancelar
+              <i className="fas fa-times"></i> Cerrar
             </button>
           </footer>
         </form>
