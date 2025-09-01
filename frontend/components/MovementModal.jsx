@@ -1,17 +1,22 @@
-// components/MovementModal.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+// components/MovementModal.jsx (mismo estilo anterior, datos desde la base)
+"use client";
+import React, { useEffect, useMemo, useState } from 'react';
 
-const MovementModal = ({ clients = [], selectedClientId, onClose, onSave, uid }) => {
-  const [clientId, setClientId] = useState(selectedClientId || clients[0]?.id || '');
+const MovementModal = ({ selectedClientId, onClose, onSaved }) => {
+  const [clients, setClients] = useState([]);
+  const [clientId, setClientId] = useState(selectedClientId || '');
   const [type, setType] = useState('compra');
   const [carteraId, setCarteraId] = useState('');
-  const [fondoSelect, setFondoSelect] = useState('');
-  const [fondoNew, setFondoNew] = useState('');
+  const [fondoSelect, setFondoSelect] = useState('');      // especie seleccionada (id) o '__new__'
+  const [fondoNew, setFondoNew] = useState('');            // nombre nueva especie
   const [monto, setMonto] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
-  const [available, setAvailable] = useState('');
+  const [availableMsg, setAvailableMsg] = useState('');
   const [error, setError] = useState('');
   const [disabled, setDisabled] = useState(false);
+
+  const [portfolios, setPortfolios] = useState([]);        // [{id,name}]
+  const [funds, setFunds] = useState([]);                  // [{id,name,nominal}] saldo por especie en cartera
 
   // Cerrar con Escape
   useEffect(() => {
@@ -31,118 +36,182 @@ const MovementModal = ({ clients = [], selectedClientId, onClose, onSave, uid })
     return parseFloat(String(val).replace(',', '.'));
   };
 
-  // Asegura cliente inicial si no llega selectedClientId
+  // Cargar clientes para el select
   useEffect(() => {
-    if (!clientId && clients.length) {
-      setClientId(selectedClientId || clients[0].id);
+    (async () => {
+      try {
+        const r = await fetch('/api/cliente', { cache: 'no-store' });
+        const j = await r.json();
+        const list = Array.isArray(j?.data) ? j.data : [];
+        const mapped = list
+          .map((c) => ({ id: Number(c.id ?? c.id_cliente ?? 0), name: c.name ?? c.nombre ?? '' }))
+          .filter((c) => c.id && c.name);
+        setClients(mapped);
+        if (!clientId && mapped[0]) setClientId(mapped[0].id);
+      } catch (e) {
+        console.error('MovementModal clientes error:', e);
+      }
+    })();
+  }, []);
+
+  // Cargar carteras del cliente
+  useEffect(() => {
+    setPortfolios([]);
+    setCarteraId('');
+    setFunds([]);
+    setFondoSelect('');
+    if (!clientId) return;
+    (async () => {
+      try {
+        const r = await fetch(`/api/fondo?cliente_id=${clientId}`, { cache: 'no-store' });
+        const j = await r.json();
+        const rows = Array.isArray(j?.data) ? j.data : [];
+        const mapped = rows
+          .map((f) => ({
+            id: Number(f.id ?? f.id_fondo ?? 0),
+            name:
+              f?.nombre ??
+              f?.name ??
+              f?.descripcion ??
+              f?.tipo_cartera?.descripcion ??
+              `Cartera ${Number(f.id ?? f.id_fondo ?? 0)}`,
+          }))
+          .filter((p) => p.id);
+        setPortfolios(mapped);
+        if (mapped[0]) setCarteraId(mapped[0].id);
+      } catch (e) {
+        console.error('MovementModal fondos error:', e);
+      }
+    })();
+  }, [clientId]);
+
+  // Cargar saldo por especie en la cartera
+  const loadFunds = async (clienteId, fondoId) => {
+    setFunds([]);
+    setFondoSelect('');
+    if (!clienteId || !fondoId) return;
+    try {
+      const r = await fetch(`/api/movimiento?cliente_id=${clienteId}&fondo_id=${fondoId}&limit=10000`, { cache: 'no-store' });
+      const j = await r.json();
+      const data = Array.isArray(j?.data) ? j.data : [];
+      const byId = new Map();
+      for (const m of data) {
+        const idE = Number(m.tipo_especie_id);
+        const nameE = m.especie || '';
+        const n = Number(m.nominal) || 0;
+        if (!idE || !nameE) continue;
+        const prev = byId.get(idE) || { id: idE, name: nameE, nominal: 0 };
+        prev.nominal += m.tipo_mov === 'venta' ? -n : n;
+        byId.set(idE, prev);
+      }
+      const list = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      setFunds(list);
+      if (list[0]) setFondoSelect(String(list[0].id));
+    } catch (e) {
+      console.error('MovementModal especies/saldo error:', e);
     }
-  }, [clients, selectedClientId, clientId]);
-
-  const selectedClient = useMemo(
-    () => clients.find((c) => c.id === clientId),
-    [clients, clientId]
-  );
-  const selectedPortfolio = useMemo(
-    () => selectedClient?.portfolios.find((p) => p.id === carteraId),
-    [selectedClient, carteraId]
-  );
-
-  // Setea cartera por defecto al cambiar cliente
-  useEffect(() => {
-    if (clientId && selectedClient?.portfolios?.length) {
-      setCarteraId(selectedClient.portfolios[0].id);
-    }
-  }, [clientId, selectedClient]);
-
-  // Setea especie por defecto al cambiar cartera
-  useEffect(() => {
-    if (!selectedPortfolio) {
-      setFondoSelect('');
-      return;
-    }
-    const firstFund = selectedPortfolio.funds?.[0]?.name;
-    setFondoSelect(firstFund || '__new__');
-    setFondoNew('');
-  }, [selectedPortfolio]);
-
-  useEffect(() => {
-    updateAvailable();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, carteraId, fondoSelect, type, monto]);
-
-  const getAvailableUnits = () => {
-    if (!selectedPortfolio || !fondoSelect || fondoSelect === '__new__') return 0;
-    const f = selectedPortfolio.funds.find((x) => x.name === fondoSelect);
-    return f ? f.nominal || 0 : 0;
   };
 
-  const updateAvailable = () => {
+  useEffect(() => {
+    if (clientId && carteraId) loadFunds(clientId, carteraId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carteraId, clientId, fecha, type]);
+
+  const selectedFund = useMemo(
+    () => funds.find((f) => String(f.id) === String(fondoSelect)),
+    [funds, fondoSelect]
+  );
+
+  // Actualiza mensajes de disponible
+  useEffect(() => {
     setError('');
     setDisabled(false);
-    if (!clientId || !carteraId || !fondoSelect) return;
+    if (!clientId || !carteraId) return;
 
     if (fondoSelect === '__new__') {
       if (type === 'venta') {
-        setAvailable('No es posible vender: la especie no existe en esta cartera.');
+        setAvailableMsg('No es posible vender: la especie no existe en esta cartera.');
         setError('Venta no permitida: seleccioná una especie existente o cambiá a Compra.');
         setDisabled(true);
       } else {
-        setAvailable('Vas a crear una nueva especie en la cartera al guardar (compra).');
+        setAvailableMsg('Vas a crear una nueva especie en la cartera al guardar (compra).');
+      }
+      return;
+    }
+
+    const avail = selectedFund?.nominal || 0;
+    if (type === 'venta') {
+      setAvailableMsg(`Disponibles: ${avail.toLocaleString('es-AR', { maximumFractionDigits: 2 })} unidades.`);
+      const cur = parseAmount(monto || '0');
+      if (cur > avail) {
+        setError(`No podés vender más de ${avail.toLocaleString('es-AR', { maximumFractionDigits: 2 })} unidades.`);
+        setDisabled(true);
       }
     } else {
-      const avail = getAvailableUnits();
-      if (type === 'venta') {
-        setAvailable(`Disponibles: ${avail.toLocaleString('es-AR', { maximumFractionDigits: 2 })} unidades.`);
-        const cur = parseAmount(monto || '0');
-        if (cur > avail) {
-          setError(`No podés vender más de ${avail.toLocaleString('es-AR', { maximumFractionDigits: 2 })} unidades.`);
-          setDisabled(true);
-        }
-      } else {
-        setAvailable(`Existentes: ${avail.toLocaleString('es-AR', { maximumFractionDigits: 2 })} u. — seleccionar para comprar o agregar nueva especie.`);
-      }
+      setAvailableMsg(
+        `Existentes: ${avail.toLocaleString('es-AR', { maximumFractionDigits: 2 })} u. — seleccionar para comprar o agregar nueva especie.`
+      );
     }
-  };
+  }, [clientId, carteraId, fondoSelect, selectedFund, type, monto]);
 
-  const handleSave = () => {
-    let fondo = fondoSelect === '__new__' ? fondoNew.trim() : fondoSelect;
+  const handleSave = async () => {
+    let especieNombre = fondoSelect === '__new__' ? (fondoNew || '').trim() : selectedFund?.name;
+    const especieId = fondoSelect !== '__new__' ? Number(fondoSelect) : null;
     const amount = parseAmount(monto);
-    if (!selectedPortfolio || !fondo || !fecha || isNaN(amount) || amount <= 0) {
-      setError('Completá todos los campos correctamente (monto > 0).');
+
+    if (!clientId || !carteraId || !fecha || !type) {
+      setError('Completá todos los campos.');
+      return;
+    }
+    if (fondoSelect === '__new__' && !especieNombre) {
+      setError('Ingresá el nombre de la nueva especie.');
+      return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+      setError('El monto debe ser mayor a 0.');
       return;
     }
     if (type === 'venta') {
-      const avail = getAvailableUnits();
+      const avail = selectedFund?.nominal || 0;
       if (amount > avail) {
         setError(`No podés retirar más de lo que hay. Disponibles: ${avail.toLocaleString('es-AR', { maximumFractionDigits: 2 })} unidades.`);
         return;
       }
     }
 
-    const movement = { id: uid('m'), date: fecha, type, fund: fondo, portfolio: selectedPortfolio.name, amount };
-    const updatedPortfolios = selectedClient.portfolios.map((p) => {
-      if (p.id !== carteraId) return p;
-      let funds = [...p.funds];
-      let fundObj = funds.find((f) => f.name.toLowerCase() === fondo.toLowerCase());
-      if (!fundObj) {
-        fundObj = { id: uid('f'), name: fondo, nominal: 0, monthlyReturn: 0, totalReturn: 0 };
-        funds.push(fundObj);
+    try {
+      const payload = {
+        cliente_id: Number(clientId),
+        fondo_id: Number(carteraId),
+        fecha_alta: fecha,
+        tipo_mov: type,
+        nominal: amount,
+        ...(especieId ? { tipo_especie_id: especieId } : { especie: especieNombre }),
+      };
+      const res = await fetch('/api/movimiento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(j?.error || 'No se pudo guardar el movimiento');
+        return;
       }
-      fundObj.nominal += type === 'compra' ? amount : -amount;
-      funds = funds.filter((f) => f.nominal > 0);
-      return { ...p, funds };
-    });
-
-    onSave({ clientId, movement, updatedPortfolios });
+      onSaved?.();
+    } catch (e) {
+      console.error('Guardar movimiento error:', e);
+      setError('Error inesperado al guardar');
+    }
   };
 
   const isSaveDisabled =
     disabled ||
     !clientId ||
     !carteraId ||
-    !fondoSelect ||
-    (fondoSelect === '__new__' && !fondoNew.trim()) ||
     !fecha ||
+    !type ||
+    !((fondoSelect && fondoSelect !== '__new__') || (fondoSelect === '__new__' && fondoNew.trim())) ||
     isNaN(parseAmount(monto)) ||
     parseAmount(monto) <= 0;
 
@@ -151,11 +220,8 @@ const MovementModal = ({ clients = [], selectedClientId, onClose, onSave, uid })
     if (!isSaveDisabled) handleSave();
   };
 
-  // Cerrar al hacer click fuera del modal (overlay)
   const handleOverlayMouseDown = (e) => {
-    if (e.target === e.currentTarget) {
-      onClose?.();
-    }
+    if (e.target === e.currentTarget) onClose?.();
   };
 
   return (
@@ -178,7 +244,7 @@ const MovementModal = ({ clients = [], selectedClientId, onClose, onSave, uid })
           <div className="modal-body">
             <div className="input-group">
               <label htmlFor="mov-client"><i className="fas fa-user"></i> Cliente</label>
-              <select id="mov-client" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <select id="mov-client" value={clientId} onChange={(e) => setClientId(Number(e.target.value))}>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
@@ -194,8 +260,8 @@ const MovementModal = ({ clients = [], selectedClientId, onClose, onSave, uid })
 
               <div className="input-group">
                 <label htmlFor="mov-cartera"><i className="fas fa-wallet"></i> Cartera</label>
-                <select id="mov-cartera" value={carteraId} onChange={(e) => setCarteraId(e.target.value)}>
-                  {selectedClient?.portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                <select id="mov-cartera" value={carteraId} onChange={(e) => setCarteraId(Number(e.target.value))}>
+                  {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
             </div>
@@ -203,9 +269,9 @@ const MovementModal = ({ clients = [], selectedClientId, onClose, onSave, uid })
             <div className="input-group">
               <label htmlFor="mov-fondo-select"><i className="fas fa-line-chart"></i> Especie</label>
               <select id="mov-fondo-select" value={fondoSelect} onChange={(e) => setFondoSelect(e.target.value)}>
-                {selectedPortfolio?.funds.map((f) => (
-                  <option key={f.name} value={f.name}>
-                    {f.name} — {f.nominal.toLocaleString('es-AR', { maximumFractionDigits: 2 })} u.
+                {funds.map((f) => (
+                  <option key={f.id} value={String(f.id)}>
+                    {f.name} — {Number(f.nominal || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })} u.
                   </option>
                 ))}
                 <option value="__new__">➕ Agregar nueva especie...</option>
@@ -235,7 +301,7 @@ const MovementModal = ({ clients = [], selectedClientId, onClose, onSave, uid })
                   onChange={(e) => setMonto(e.target.value)}
                 />
                 <div className="field-hint" id="mov-available" aria-live="polite" style={{ marginTop: '6px' }}>
-                  {available}
+                  {availableMsg}
                 </div>
                 {error && (
                   <div className="field-error" style={{ display: 'block' }}>
