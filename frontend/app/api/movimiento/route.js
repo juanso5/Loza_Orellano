@@ -116,81 +116,39 @@ const upsertPreciosSchema = z.object({
   ).min(1),
 });
 
-async function assertFondoBelongs(sb, fondoId, clienteId) {
-  const { data, error } = await sb
-    .from("fondo")
-    .select("id_fondo,cliente_id")
-    .eq("id_fondo", fondoId)
-    .single();
-  if (error) throw error;
-  if (!data || Number(data.cliente_id) !== Number(clienteId)) {
-    const err = new Error("El fondo no pertenece al cliente indicado");
-    err.status = 400;
-    throw err;
-  }
-}
-
-async function resolveTipoEspecieId(sb, maybeId, maybeName) {
-  if (maybeId) return Number(maybeId);
-  const name = (maybeName || "").trim();
-  if (!name) {
-    const err = new Error("Debe indicar tipo_especie_id o nombre de especie");
-    err.status = 400;
-    throw err;
-  }
-  // 1) exacto
-  let q = await sb
-    .from("tipo_especie")
-    .select("id_tipo_especie,nombre")
-    .eq("nombre", name)
-    .limit(1);
-  if (q.error) throw q.error;
-  if (q.data?.[0]) return Number(q.data[0].id_tipo_especie);
-
-  // 2) case-insensitive, pero filtrando exacto por lower en JS
-  const q2 = await sb
-    .from("tipo_especie")
-    .select("id_tipo_especie,nombre")
-    .ilike("nombre", name)
-    .limit(10);
-  if (q2.error) throw q2.error;
-  const exactCI = (q2.data || []).find(r => String(r.nombre).toLowerCase() === name.toLowerCase());
-  if (exactCI) return Number(exactCI.id_tipo_especie);
-
-  // 3) crear
-  const ins = await sb
-    .from("tipo_especie")
-    .insert({ nombre: name })
-    .select("id_tipo_especie")
-    .single();
-  if (ins.error) throw ins.error;
-  return Number(ins.data.id_tipo_especie);
-}
-
-async function computeDisponible(sb, cliente_id, fondo_id, tipo_especie_id, fecha_alta) {
-  const end = fecha_alta ? toIsoEndOfDay(fecha_alta) : null;
-  let q = sb
-    .from("movimiento")
-    .select("tipo_mov,nominal")
-    .eq("cliente_id", cliente_id)
-    .eq("fondo_id", fondo_id)
-    .eq("tipo_especie_id", tipo_especie_id);
-  if (end) q = q.lte("fecha_alta", end);
-  const { data, error } = await q.limit(10000);
-  if (error) throw error;
-  let disponible = 0;
-  for (const r of data || []) {
-    const n = Number(r.nominal) || 0;
-    disponible += r.tipo_mov === "venta" ? -n : n;
-  }
-  return disponible;
-}
-
 // GET
 export async function GET(req) {
   try {
     const sb = getSb();
     const { searchParams } = new URL(req.url);
+    const action = searchParams.get("action");
+
+    // Nuevo: devolver último precio por especie (nombre + precio desde tipo_especie)
+    if (action === "latestPrecios") {
+      const { data, error } = await sb
+        .from("precio_especie")
+        .select("tipo_especie_id,precio,fecha,tipo_especie:tipo_especie_id(id_tipo_especie,nombre)")
+        .order("tipo_especie_id", { ascending: true })
+        .order("fecha", { ascending: false })
+        .limit(20000);
+      if (error) throw error;
+
+      const latestById = new Map();
+      for (const r of data || []) {
+        const id = Number(r.tipo_especie_id);
+        if (!latestById.has(id)) {
+          latestById.set(id, {
+            tipo_especie_id: id,
+            nombre: r?.tipo_especie?.nombre ?? null,
+            precio: Number(r.precio),
+            fecha: r.fecha,
+          });
+        }
+      }
+      return NextResponse.json({ data: Array.from(latestById.values()) });
+    }
+
+    // Resto de GET movimientos
     const id = searchParams.get("id");
     const clienteId = searchParams.get("cliente_id");
     const fondoId = searchParams.get("fondo_id");
@@ -292,7 +250,6 @@ export async function POST(req) {
       }
 
       async function upsertRow(row) {
-        // Buscar un precio existente de ese día (independiente de hora)
         const sel = await sb.from('precio_especie')
           .select('id_especie, tipo_especie_id, fecha, precio')
           .eq('tipo_especie_id', row.tipo_especie_id)
@@ -324,7 +281,7 @@ export async function POST(req) {
         const tipoEspecieId = await getOrCreateEspecieId(it.instrumento);
         const id = await upsertRow({
           tipo_especie_id: tipoEspecieId,
-          fecha: startIso,          // timestamptz inicio del día UTC
+          fecha: startIso,
           precio: Number(it.precio),
         });
         savedIds.push(id);
@@ -334,6 +291,16 @@ export async function POST(req) {
     }
 
     // Alta de movimiento
+    const createSchema = z.object({
+      cliente_id: z.coerce.number().int().positive(),
+      fondo_id: z.coerce.number().int().positive(),
+      fecha_alta: z.union([ymd, z.string().datetime().optional()]).optional(),
+      tipo_mov: z.enum(["compra", "venta"]),
+      nominal: z.coerce.number().int().positive(),
+      precio_usd: z.coerce.number().optional().nullable(),
+      tipo_especie_id: z.coerce.number().int().positive().optional(),
+      especie: z.string().min(1).optional(),
+    });
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -351,6 +318,73 @@ export async function POST(req) {
     } = parsed.data;
 
     const sb = getSb();
+
+    async function assertFondoBelongs(sb, fondoId, clienteId) {
+      const { data, error } = await sb
+        .from("fondo")
+        .select("id_fondo,cliente_id")
+        .eq("id_fondo", fondoId)
+        .single();
+      if (error) throw error;
+      if (!data || Number(data.cliente_id) !== Number(clienteId)) {
+        const err = new Error("El fondo no pertenece al cliente indicado");
+        err.status = 400;
+        throw err;
+      }
+    }
+
+    async function resolveTipoEspecieId(sb, maybeId, maybeName) {
+      if (maybeId) return Number(maybeId);
+      const name = (maybeName || "").trim();
+      if (!name) {
+        const err = new Error("Debe indicar tipo_especie_id o nombre de especie");
+        err.status = 400;
+        throw err;
+      }
+      let q = await sb
+        .from("tipo_especie")
+        .select("id_tipo_especie,nombre")
+        .eq("nombre", name)
+        .limit(1);
+      if (q.error) throw q.error;
+      if (q.data?.[0]) return Number(q.data[0].id_tipo_especie);
+
+      const q2 = await sb
+        .from("tipo_especie")
+        .select("id_tipo_especie,nombre")
+        .ilike("nombre", name)
+        .limit(10);
+      if (q2.error) throw q2.error;
+      const exactCI = (q2.data || []).find(r => String(r.nombre).toLowerCase() === name.toLowerCase());
+      if (exactCI) return Number(exactCI.id_tipo_especie);
+
+      const ins = await sb
+        .from("tipo_especie")
+        .insert({ nombre: name })
+        .select("id_tipo_especie")
+        .single();
+      if (ins.error) throw ins.error;
+      return Number(ins.data.id_tipo_especie);
+    }
+
+    async function computeDisponible(sb, cliente_id, fondo_id, tipo_especie_id, fecha_alta) {
+      const end = fecha_alta ? toIsoEndOfDay(fecha_alta) : null;
+      let q = sb
+        .from("movimiento")
+        .select("tipo_mov,nominal")
+        .eq("cliente_id", cliente_id)
+        .eq("fondo_id", fondo_id)
+        .eq("tipo_especie_id", tipo_especie_id);
+      if (end) q = q.lte("fecha_alta", end);
+      const { data, error } = await q.limit(10000);
+      if (error) throw error;
+      let disponible = 0;
+      for (const r of data || []) {
+        const n = Number(r.nominal) || 0;
+        disponible += r.tipo_mov === "venta" ? -n : n;
+      }
+      return disponible;
+    }
 
     await assertFondoBelongs(sb, fondo_id, cliente_id);
     const especieId = await resolveTipoEspecieId(sb, tipo_especie_id, especie);
@@ -394,7 +428,17 @@ export async function POST(req) {
 export async function PATCH(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = updateSchema.safeParse(body);
+    const parsed = z.object({
+      id: z.coerce.number().int().positive(),
+      cliente_id: z.coerce.number().int().positive().optional(),
+      fondo_id: z.coerce.number().int().positive().optional(),
+      fecha_alta: z.union([ymd, z.string().datetime()]).optional(),
+      tipo_mov: z.enum(["compra", "venta"]).optional(),
+      nominal: z.coerce.number().int().positive().optional(),
+      precio_usd: z.coerce.number().optional().nullable(),
+      tipo_especie_id: z.coerce.number().int().positive().optional(),
+      especie: z.string().min(1).optional(),
+    }).safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -423,13 +467,33 @@ export async function PATCH(req) {
     if (precio_usd !== undefined) patch.precio_usd = precio_usd ?? null;
 
     if (tipo_especie_id != null || especie != null) {
-      patch.tipo_especie_id = await resolveTipoEspecieId(sb, tipo_especie_id, especie);
+      // resolve id
+      const nameToId = async () => {
+        if (tipo_especie_id) return Number(tipo_especie_id);
+        const name = (especie || '').trim();
+        if (!name) return undefined;
+        const q = await sb.from('tipo_especie').select('id_tipo_especie').eq('nombre', name).limit(1);
+        if (q.error) throw q.error;
+        return q.data?.[0]?.id_tipo_especie;
+      };
+      const resolved = await nameToId();
+      if (resolved != null) patch.tipo_especie_id = resolved;
     }
 
     if (patch.fondo_id != null || patch.cliente_id != null) {
       const cId = patch.cliente_id ?? cliente_id;
       const fId = patch.fondo_id ?? fondo_id;
-      if (cId && fId) await assertFondoBelongs(sb, fId, cId);
+      if (cId && fId) {
+        const { data, error } = await sb
+          .from("fondo")
+          .select("id_fondo,cliente_id")
+          .eq("id_fondo", fId)
+          .single();
+        if (error) throw error;
+        if (!data || Number(data.cliente_id) !== Number(cId)) {
+          return NextResponse.json({ error: "El fondo no pertenece al cliente indicado" }, { status: 400 });
+        }
+      }
     }
 
     if (Object.keys(patch).length === 0) {
@@ -456,7 +520,7 @@ export async function PATCH(req) {
 export async function DELETE(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = deleteSchema.safeParse(body);
+    const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Falta id válido" }, { status: 400 });
     }

@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react';
  * - Ignora filas de caja (Instrumento = ARS/USD/USDC/USD.C)
  * - Calcula precio ponderado = sum(Monto total) / sum(Cantidad) por Instrumento
  * - Persiste con action upsertPrecios en /api/movimiento
- * - Guarda un mapping local (localStorage) para pintar valorizaciones en la UI
+ * - Valorización SIEMPRE desde la base (GET /api/movimiento?action=latestPrecios), sin localStorage
  */
 export default function CSVMovimientos() {
   const initRef = useRef(false);
@@ -17,7 +17,6 @@ export default function CSVMovimientos() {
     if (initRef.current) return;
     initRef.current = true;
 
-    const CSV_KEY = 'movements_prices_v1';
     const DEFAULT_LAST_N = 10;
 
     // DOM refs
@@ -64,6 +63,8 @@ export default function CSVMovimientos() {
     let fundNamesById = new Map();
     let openModalEl = null;
     let currentModalClientId = '';
+    // Mapa de precios cargado desde la base
+    let pricesMap = {};
 
     // Utils
     const fmtNumber = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -84,11 +85,9 @@ export default function CSVMovimientos() {
     // Cierre correcto: por botón (X) y por click en overlay
     function wireModalClose(modalEl){
       if(!modalEl) return;
-      // cerrar con botones dentro del modal
       modalEl.querySelectorAll('.modal-close, .btn-close, [data-action="close"]').forEach(btn=>{
         btn.addEventListener('click', (ev)=>{ ev.preventDefault(); hideModal(modalEl); });
       });
-      // cerrar clickeando fuera del contenido
       modalEl.addEventListener('mousedown', (ev)=>{
         if(ev.target === modalEl) hideModal(modalEl);
       });
@@ -240,8 +239,11 @@ export default function CSVMovimientos() {
       mapped.forEach(m => { if (m.fondoId && m.fondoName) fundNamesById.set(m.fondoId, m.fondoName); });
 
       const spMap = new Map();
-      mapped.forEach(m => { if (m.especieId && m.especieName) spMap.set(m.especieId, m.especieName); });
-      species = Array.from(spMap, ([id,name]) => ({ id, name }));
+      mapped.forEach(m => { if (m.aspecieId && m.especieName) spMap.set(m.especieId, m.especieName); });
+      // Nota: si el join ya viene, conservamos species por id/nombre de movimientos existentes
+      const spMap2 = new Map();
+      mapped.forEach(m => { if (m.especieId || m.especieName) spMap2.set(m.especieId || m.especieName, m.especieName || String(m.especieId)); });
+      species = Array.from(spMap2, ([id,name]) => ({ id, name }));
 
       return mapped;
     }
@@ -437,9 +439,8 @@ export default function CSVMovimientos() {
     });
     newEspecieInput.addEventListener('input', updateAvailableUI);
     tipoSelect.addEventListener('change', updateAvailableUI);
-
-
     fondoSelect.addEventListener('change', updateAvailableUI);
+
     // Al cambiar de cliente en el modal, cargar sus carteras
     clienteSelect.addEventListener('change', async () => {
       await ensureFundsForClient(clienteSelect.value || '');
@@ -622,18 +623,18 @@ export default function CSVMovimientos() {
 
         hideModal(movementModal);
 
-        // Recargar datos y mantener todos los nombres de carteras disponibles
+        // Recargar datos y mantener nombres
         movements = await fetchMovements();
         allFunds = await fetchAllFunds();
         allFunds = allFunds.map(f => ({ ...f, name: fundNamesById.get(f.id) || f.name }));
 
-        // Si el usuario cambió de cliente en el modal, reflejarlo
         currentModalClientId = cleaned.clienteId || currentModalClientId || '';
         fondos = await fetchFundsForClient(currentModalClientId);
 
         renderClients(searchInput.value||'');
         renderLastMovements();
-        applyStoredCSVValues();
+        // Reaplicar con precios ya cargados en memoria
+        updateValuesFromMapping(pricesMap);
       } catch (e) {
         console.error(e);
         alert('Error guardando movimiento: ' + (e?.message || e));
@@ -641,7 +642,10 @@ export default function CSVMovimientos() {
     });
     movementCancelBtn.addEventListener('click', () => hideModal(movementModal));
 
-    searchInput?.addEventListener('input', () => { renderClients(searchInput.value||''); applyStoredCSVValues(); });
+    searchInput?.addEventListener('input', () => { 
+      renderClients(searchInput.value||''); 
+      updateValuesFromMapping(pricesMap);
+    });
     openAddBtn?.addEventListener('click', () => openNewMovement());
     clientsContainer?.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -654,6 +658,7 @@ export default function CSVMovimientos() {
         if (body) {
           const hidden = body.style.display === 'none' || getComputedStyle(body).display === 'none';
           body.style.display = hidden ? 'block' : 'none';
+          if (!hidden) updateValuesFromMapping(pricesMap);
         }
       } else if (action === 'add') {
         const clientId = card.dataset.clientId || '';
@@ -675,13 +680,11 @@ export default function CSVMovimientos() {
         try {
           await showConfirm('¿Eliminar este movimiento?');
           await deleteMovement(id);
-          // Recargar datos y refrescar UI
           movements = await fetchMovements();
           renderClients(searchInput?.value || '');
           renderLastMovements();
-          applyStoredCSVValues();
+          updateValuesFromMapping(pricesMap);
         } catch (err) {
-          // Cancelado o error
           if (err && err !== false) {
             console.error(err);
             alert('Error eliminando movimiento: ' + (err.message || err));
@@ -782,17 +785,40 @@ export default function CSVMovimientos() {
       return { cleaned, dropped };
     }
 
-    function itemsToMapping(items){
-      const map = {};
-      for(const it of items){
-        const k = normalizeName(it.instrumento);
-        if(k) map[k] = Number(it.precio);
-        if(k && !k.endsWith('d')) map[`${k}d`] = Number(it.precio);
+    // ===== Valorización desde DB =====
+    const normalizeSimple = (s) => (s||'').toString().trim().toLowerCase().replace(/\s+/g,'').replace(/[^\w]/g,'');
+
+    async function fetchServerPricesMapping(){
+      try {
+        const j = await apiJSON('/api/movimiento?action=latestPrecios');
+        const arr = Array.isArray(j?.data) ? j.data : [];
+        const map = {};
+        for (const r of arr) {
+          const name = (r?.nombre || '').trim();
+          const price = Number(r?.precio);
+          if (!name || !Number.isFinite(price) || price <= 0) continue;
+          const k = normalizeSimple(name);
+          map[k] = price;
+          if (k && !k.endsWith('d')) map[`${k}d`] = price; // alias si aplica (AL30 -> AL30D)
+        }
+        return map;
+      } catch (e) {
+        console.error('Error obteniendo precios del servidor', e);
+        return {};
       }
-      return map;
     }
 
-    function applyStoredCSVValues(){ try { const raw=localStorage.getItem(CSV_KEY); if(!raw) return; const map=JSON.parse(raw); if(map) updateValuesFromMapping(map); } catch(e){ console.error(e);} }
+    async function loadPricesFromDB(){
+      try {
+        if (csvStatusText) csvStatusText.textContent = 'Cargando precios desde la base...';
+        pricesMap = await fetchServerPricesMapping();
+        updateValuesFromMapping(pricesMap);
+        if (csvStatusText) csvStatusText.textContent = 'Precios (DB) aplicados — ' + new Date().toLocaleString();
+        if (clearCsvBtn) clearCsvBtn.style.display = 'none'; // no se usa más
+      } catch (e) {
+        if (csvStatusText) csvStatusText.textContent = 'No se pudieron cargar precios';
+      }
+    }
 
     function updateValuesFromMapping(mapping){
       if(!clientsContainer) return;
@@ -815,7 +841,6 @@ export default function CSVMovimientos() {
         const rows = card.querySelectorAll('.fund-table tbody tr, .fund-list li');
 
         rows.forEach(row => {
-          // Resolver nombre, cantidad y celda de valor según el tipo de nodo
           const isTr = row.tagName === 'TR';
           const nameEl = row.querySelector('.especie-name') || row.querySelector('span');
           const qtyEl  = row.querySelector('.especie-qty')  || row.querySelector('strong');
@@ -825,17 +850,10 @@ export default function CSVMovimientos() {
 
           const displayName = (nameEl.textContent || '').trim();
           const nominal = parseLocaleInteger(qtyEl.textContent || '0');
-          const normName = normalizeName(displayName);
+          const normName = normalizeSimple(displayName);
 
-          // Buscar precio en el mapping (mantiene tu lógica actual)
-          let price = undefined;
-          if (mapping) {
-            // intenta por nombre normalizado y por nombre exacto
-            price = mapping[normName];
-            if (price === undefined) price = mapping[displayName];
-          }
+          const price = mapping[normName] ?? mapping[displayName] ?? undefined;
 
-          // Crear el elemento de valor si no existe (sin romper la grilla/tabla)
           if (!valueEl) {
             if (isTr) {
               valueEl = document.createElement('td');
@@ -872,7 +890,8 @@ export default function CSVMovimientos() {
       }
     }
 
-    const mo = new MutationObserver(() => { applyStoredCSVValues(); });
+    // Reaplicar valores si cambia el DOM del contenedor (sin golpear la API)
+    const mo = new MutationObserver(() => { updateValuesFromMapping(pricesMap); });
     if(clientsContainer) mo.observe(clientsContainer,{childList:true,subtree:true});
 
     window.__movementsApp = {
@@ -880,7 +899,9 @@ export default function CSVMovimientos() {
         movements = await fetchMovements();
         allFunds = await fetchAllFunds();
         fondos = allFunds.slice();
-        renderClients(searchInput?.value||''); renderLastMovements(); applyStoredCSVValues();
+        renderClients(searchInput?.value||''); 
+        renderLastMovements(); 
+        updateValuesFromMapping(pricesMap);
       }
     };
 
@@ -898,18 +919,15 @@ export default function CSVMovimientos() {
       populateFormSelects(spSelected);
       renderClients();
       renderLastMovements();
-      applyStoredCSVValues();
       updateAvailableUI();
+
+      await loadPricesFromDB();
     })();
 
     if(csvUploadBtn && csvFileInput){
       csvUploadBtn.addEventListener('click', ()=> csvFileInput.click());
-      clearCsvBtn.addEventListener('click', ()=> {
-        localStorage.removeItem(CSV_KEY);
-        if (csvStatusText) csvStatusText.textContent='Precios eliminados';
-        clearCsvBtn.style.display='none';
-        applyStoredCSVValues();
-      });
+      // Clear no se usa más para precios
+      if (clearCsvBtn) clearCsvBtn.style.display = 'none';
 
       csvFileInput.addEventListener('change', async (e)=> {
         const f=e.target.files&&e.target.files[0];
@@ -938,13 +956,12 @@ export default function CSVMovimientos() {
             }),
           });
 
-          const mapping = itemsToMapping(cleaned);
-          localStorage.setItem(CSV_KEY, JSON.stringify(mapping));
-          const msg = `Precios guardados (${cleaned.length}${dropped?`, descartados: ${dropped}`:''}) — ${fecha}`;
-          if (csvStatusText) csvStatusText.textContent = msg;
-          clearCsvBtn.style.display='inline-block';
-          applyStoredCSVValues();
-          alert('Precios guardados correctamente.');
+          if (csvStatusText) {
+            const msg = `Precios guardados en DB (${cleaned.length}${dropped?`, descartados: ${dropped}`:''}) — ${fecha}`;
+            csvStatusText.textContent = msg;
+          }
+          await loadPricesFromDB(); // vuelve a leer de DB y aplica
+          alert('Precios guardados y aplicados desde la base.');
         } catch(err){
           console.error(err);
           alert('Error procesando/guardando el CSV: '+(err?.message||err));
@@ -968,7 +985,7 @@ export default function CSVMovimientos() {
           <button id="csvUploadBtn" className="btn secondary" title="Cargar precios CSV"><i className="fas fa-file-csv" /> Cargar precios CSV</button>
           <input id="csvFileInput" type="file" accept=".csv" style={{ display: 'none' }} />
           <div id="csvStatus" className="csv-status" aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
-            <small id="csvStatusText">No hay precios cargados</small>
+            <small id="csvStatusText">Cargando precios desde la base...</small>
             <button id="clearCsvBtn" className="btn" title="Quitar precios cargados" style={{ display: 'none' }}>Limpiar</button>
           </div>
           <input id="searchInput" className="search-input" placeholder="Buscar por cliente, especie o cartera..." />
@@ -1064,32 +1081,40 @@ export default function CSVMovimientos() {
           <div className="modal-footer"><button className="btn primary" id="confirmOkBtn">Confirmar</button><button className="btn" id="confirmCancelBtn">Cancelar</button></div>
           </div></div>
       </div>
+
       <style jsx global>{`
-        .fund-table {
-          width: 100%;
-          border-collapse: collapse;
-          table-layout: fixed; /* colgroup manda */
-        }
+        /* Soporte tabla (si la usás en el futuro) */
+        .fund-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .fund-table col.col-name { width: auto; }
         .fund-table col.col-qty { width: 12ch; }
         .fund-table col.col-value { width: 14ch; }
+        .fund-table td { padding: 8px 12px; vertical-align: middle; }
+        .fund-table .especie-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fund-table .num { text-align: right; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-        .fund-table td {
+        /* Estilo de la lista actual (UL/LI) con columnas fijas y sin recortes */
+        .fund-list { list-style: none; margin: 0; padding: 0; width: 100%; }
+        .fund-list li {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) max-content max-content; /* nombre | qty | valor */
+          column-gap: 12px;
+          align-items: center;
           padding: 8px 12px;
-          vertical-align: middle;
+          border-radius: 8px;
         }
-        .fund-table .especie-name {
-          display: block;         /* permite ellipsis dentro del td */
+        .fund-list li .especie-name {
           min-width: 0;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .fund-table .num {
+        .fund-list li .especie-qty,
+        .fund-list li .especie-value {
+          justify-self: end;
           text-align: right;
           white-space: nowrap;
           font-weight: 600;
-          font-variant-numeric: tabular-nums; /* números alineados */
+          font-variant-numeric: tabular-nums;
         }
 
         /* Evitar que el total del header se achique o se recorte */
