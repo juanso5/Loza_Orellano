@@ -79,15 +79,6 @@ const PortfolioDetailModal = ({
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button
                 type="button"
-                className="btn"
-                title="Eliminar cartera"
-                onClick={onDelete}
-                style={{ color: "#a33" }}
-              >
-                <i className="fas fa-trash"></i>
-              </button>
-              <button
-                type="button"
                 className="modal-close"
                 onClick={onClose}
                 aria-label="Cerrar"
@@ -166,6 +157,9 @@ const PortfolioDetailModal = ({
             </button>
             <button type="button" className="btn-close" onClick={onClose}>
               <i className="fas fa-times"></i> Cerrar
+            </button>
+            <button type="button" className="btn" title="Eliminar cartera" onClick={onDelete} style={{ color: "#a33" }}>
+              <i className="fas fa-trash"></i>
             </button>
           </footer>
         </form>

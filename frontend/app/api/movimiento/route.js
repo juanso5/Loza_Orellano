@@ -12,6 +12,7 @@ const getSb = () => {
   return createClient(url, key, { auth: { persistSession: false } });
 };
 
+// SELECT con joins para nombres
 const SELECT_BASE =
   "id_movimiento,cliente_id,fondo_id,fecha_alta,precio_usd,tipo_mov,nominal,tipo_especie_id," +
   "tipo_especie:tipo_especie_id(id_tipo_especie,nombre)," +
@@ -30,24 +31,36 @@ const ALLOWED_ORDER = new Set([
 ]);
 
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
 const toIsoStartOfDay = (v) => {
   if (!v) return null;
   const s = String(v);
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00.000Z`;
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  return Number.isNaN(d.getTime()) ? null : new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0)).toISOString();
 };
 const toIsoEndOfDay = (v) => {
   if (!v) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) {
-    const d = new Date(`${v}T00:00:00.000Z`);
-    d.setUTCHours(23, 59, 59, 999);
-    return d.toISOString();
+  const s = String(v);
+  let d;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) d = new Date(`${s}T00:00:00.000Z`);
+  else {
+    d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
   }
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return null;
   d.setUTCHours(23, 59, 59, 999);
   return d.toISOString();
+};
+const toYmd = (v) => {
+  if (!v) return null;
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 };
 
 const mapRow = (r) => ({
@@ -89,7 +102,7 @@ const updateSchema = z.object({
 
 const deleteSchema = z.object({ id: z.coerce.number().int().positive() });
 
-// Esquema para upsert de precios desde CSV (sin moneda)
+// Esquema para upsert de precios desde CSV (moneda opcional, no se usa)
 const upsertPreciosSchema = z.object({
   action: z.literal("upsertPrecios"),
   fecha: z.union([ymd, z.string().datetime()]),
@@ -97,6 +110,7 @@ const upsertPreciosSchema = z.object({
   items: z.array(
     z.object({
       instrumento: z.string().min(1),
+      moneda: z.string().optional(),
       precio: z.coerce.number().positive(),
     })
   ).min(1),
@@ -124,15 +138,26 @@ async function resolveTipoEspecieId(sb, maybeId, maybeName) {
     err.status = 400;
     throw err;
   }
-  const found = await sb
+  // 1) exacto
+  let q = await sb
+    .from("tipo_especie")
+    .select("id_tipo_especie,nombre")
+    .eq("nombre", name)
+    .limit(1);
+  if (q.error) throw q.error;
+  if (q.data?.[0]) return Number(q.data[0].id_tipo_especie);
+
+  // 2) case-insensitive, pero filtrando exacto por lower en JS
+  const q2 = await sb
     .from("tipo_especie")
     .select("id_tipo_especie,nombre")
     .ilike("nombre", name)
-    .limit(1);
-  if (found.error) throw found.error;
+    .limit(10);
+  if (q2.error) throw q2.error;
+  const exactCI = (q2.data || []).find(r => String(r.nombre).toLowerCase() === name.toLowerCase());
+  if (exactCI) return Number(exactCI.id_tipo_especie);
 
-  if (found.data?.[0]) return Number(found.data[0].id_tipo_especie);
-
+  // 3) crear
   const ins = await sb
     .from("tipo_especie")
     .insert({ nombre: name })
@@ -220,54 +245,96 @@ export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
 
-    // Acción: upsert de precios desde CSV (sin moneda)
+    // Acción: upsert de precios desde CSV (fecha: timestamptz a inicio del día UTC)
     if (body?.action === "upsertPrecios") {
       const parsed = upsertPreciosSchema.safeParse(body);
       if (!parsed.success) {
-        const errText = parsed.error?.issues?.map(i => i.message).join("; ") || "Datos inválidos";
-        return NextResponse.json({ error: errText, details: parsed.error.flatten() }, { status: 400 });
+        const details = parsed.error.issues?.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
+        return NextResponse.json({ error: `Datos inválidos: ${details}` }, { status: 400 });
       }
       const sb = getSb();
-      const fechaIso = toIsoStartOfDay(parsed.data.fecha) || new Date().toISOString();
+      const startIso = toIsoStartOfDay(parsed.data.fecha) || toIsoStartOfDay(new Date().toISOString());
 
-      const rows = [];
+      // rango del día para búsqueda (upsert manual por día)
+      const dayStart = startIso;
+      const dayEnd = (() => {
+        const d = new Date(startIso);
+        d.setUTCDate(d.getUTCDate() + 1);
+        d.setUTCHours(0,0,0,0);
+        return d.toISOString();
+      })();
+
+      async function getOrCreateEspecieId(nombre) {
+        const name = (nombre || '').trim();
+        if (!name) throw new Error('Instrumento vacío');
+
+        let q = await sb.from('tipo_especie')
+          .select('id_tipo_especie,nombre')
+          .eq('nombre', name)
+          .limit(1);
+        if (q.error) throw q.error;
+        if (q.data?.[0]) return Number(q.data[0].id_tipo_especie);
+
+        const q2 = await sb.from('tipo_especie')
+          .select('id_tipo_especie,nombre')
+          .ilike('nombre', name)
+          .limit(10);
+        if (q2.error) throw q2.error;
+        const exactCI = (q2.data || []).find(r => String(r.nombre).toLowerCase() === name.toLowerCase());
+        if (exactCI) return Number(exactCI.id_tipo_especie);
+
+        const ins = await sb.from('tipo_especie')
+          .insert({ nombre: name })
+          .select('id_tipo_especie')
+          .single();
+        if (ins.error) throw ins.error;
+        return Number(ins.data.id_tipo_especie);
+      }
+
+      async function upsertRow(row) {
+        // Buscar un precio existente de ese día (independiente de hora)
+        const sel = await sb.from('precio_especie')
+          .select('id_especie, tipo_especie_id, fecha, precio')
+          .eq('tipo_especie_id', row.tipo_especie_id)
+          .gte('fecha', dayStart)
+          .lt('fecha', dayEnd)
+          .limit(1)
+          .maybeSingle();
+        if (sel.error) throw sel.error;
+
+        if (sel.data) {
+          const upd = await sb.from('precio_especie')
+            .update({ precio: row.precio, fecha: row.fecha })
+            .eq('id_especie', sel.data.id_especie)
+            .select('id_especie');
+          if (upd.error) throw upd.error;
+          return upd.data?.[0]?.id_especie ?? sel.data.id_especie;
+        } else {
+          const ins = await sb.from('precio_especie')
+            .insert(row)
+            .select('id_especie')
+            .single();
+          if (ins.error) throw ins.error;
+          return ins.data.id_especie;
+        }
+      }
+
+      const savedIds = [];
       for (const it of parsed.data.items) {
-        const tipoEspecieId = await resolveTipoEspecieId(sb, null, it.instrumento);
-        rows.push({
+        const tipoEspecieId = await getOrCreateEspecieId(it.instrumento);
+        const id = await upsertRow({
           tipo_especie_id: tipoEspecieId,
-          fecha: fechaIso,
-          precio: it.precio,
+          fecha: startIso,          // timestamptz inicio del día UTC
+          precio: Number(it.precio),
         });
+        savedIds.push(id);
       }
 
-      // Upsert por (tipo_especie_id, fecha)
-      let up = await sb
-        .from("precio_especie")
-        .upsert(rows, { onConflict: "tipo_especie_id,fecha" })
-        .select("id_precio_especie,tipo_especie_id,fecha,precio");
-      if (up.error?.message?.toLowerCase?.().includes("on conflict")) {
-        up = await sb
-          .from("precio_especie")
-          .insert(rows)
-          .select("id_precio_especie,tipo_especie_id,fecha,precio");
-      }
-      if (up.error) throw up.error;
-
-      return NextResponse.json({ data: up.data || rows, saved: rows.length }, { status: 201 });
+      return NextResponse.json({ data: { saved: savedIds.length } }, { status: 201 });
     }
 
-    // Alta de movimiento (sin cambios)
-    const parsed = z.object({
-      cliente_id: z.coerce.number().int().positive(),
-      fondo_id: z.coerce.number().int().positive(),
-      fecha_alta: z.union([ymd, z.string().datetime().optional()]).optional(),
-      tipo_mov: z.enum(["compra", "venta"]),
-      nominal: z.coerce.number().int().positive(),
-      precio_usd: z.coerce.number().optional().nullable(),
-      tipo_especie_id: z.coerce.number().int().positive().optional(),
-      especie: z.string().min(1).optional(),
-    }).safeParse(body);
-
+    // Alta de movimiento
+    const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
@@ -319,25 +386,15 @@ export async function POST(req) {
   } catch (e) {
     console.error("POST /api/movimiento error:", e);
     const status = e?.status || 500;
-    return NextResponse.json({ error: e.message || "Error al crear movimiento" }, { status });
+    return NextResponse.json({ error: e?.message || "Error al crear movimiento", details: e }, { status });
   }
 }
 
-// PATCH (sin cambios)
+// PATCH
 export async function PATCH(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = z.object({
-      id: z.coerce.number().int().positive(),
-      cliente_id: z.coerce.number().int().positive().optional(),
-      fondo_id: z.coerce.number().int().positive().optional(),
-      fecha_alta: z.union([ymd, z.string().datetime()]).optional(),
-      tipo_mov: z.enum(["compra", "venta"]).optional(),
-      nominal: z.coerce.number().int().positive().optional(),
-      precio_usd: z.coerce.number().optional().nullable(),
-      tipo_especie_id: z.coerce.number().int().positive().optional(),
-      especie: z.string().min(1).optional(),
-    }).safeParse(body);
+    const parsed = updateSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -360,7 +417,7 @@ export async function PATCH(req) {
 
     if (cliente_id != null) patch.cliente_id = cliente_id;
     if (fondo_id != null) patch.fondo_id = fondo_id;
-    if (fecha_alta != null) patch.fecha_alta = toIsoStartOfDay(fecha_alta);
+    if (fecha_alta != null) patch.fecha_alta = toIsoStartOfDay(fecha_alta) ?? undefined;
     if (tipo_mov != null) patch.tipo_mov = tipo_mov;
     if (nominal != null) patch.nominal = nominal;
     if (precio_usd !== undefined) patch.precio_usd = precio_usd ?? null;
@@ -391,15 +448,15 @@ export async function PATCH(req) {
   } catch (e) {
     console.error("PATCH /api/movimiento error:", e);
     const status = e?.status || 500;
-    return NextResponse.json({ error: e.message || "Error al actualizar movimiento" }, { status });
+    return NextResponse.json({ error: e?.message || "Error al actualizar movimiento" }, { status });
   }
 }
 
-// DELETE (sin cambios)
+// DELETE
 export async function DELETE(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse(body);
+    const parsed = deleteSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Falta id válido" }, { status: 400 });
     }

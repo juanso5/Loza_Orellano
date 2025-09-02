@@ -3,16 +3,10 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Datos 100% desde la base vía /api/movimiento:
- * - Nombres reales: cliente_nombre, cartera_nombre, especie (JOINs en el handler)
- * - tipo_mov: compra/venta (UI: Ingreso/Egreso)
- * - nominal: int (DB int4)
- * - precio_usd: se muestra en el campo "Tipo de cambio"
- *
  * CSV de precios (tenencias):
- * - Columnas esperadas: Instrumento, Monto total, Cantidad, Moneda
+ * - Columnas esperadas: Instrumento, Monto total, Cantidad, Moneda (Moneda opcional, se ignora)
  * - Ignora filas de caja (Instrumento = ARS/USD/USDC/USD.C)
- * - Calcula precio ponderado = sum(Monto total) / sum(Cantidad) por Instrumento+Moneda
+ * - Calcula precio ponderado = sum(Monto total) / sum(Cantidad) por Instrumento
  * - Persiste con action upsertPrecios en /api/movimiento
  * - Guarda un mapping local (localStorage) para pintar valorizaciones en la UI
  */
@@ -45,16 +39,9 @@ export default function CSVMovimientos() {
     const newEspecieInput = document.getElementById('newEspecieInput');
     const nominalInput = document.getElementById('nominalInput');
     const tcInput = document.getElementById('tcInput');
-    const obsInput = document.getElementById('obsInput');
     const movementSaveBtn = document.getElementById('movementSaveBtn');
     const movementCancelBtn = document.getElementById('movementCancelBtn');
     const availableHint = document.getElementById('availableHint');
-
-    // client modal
-    const clientModal = document.getElementById('clientModal');
-    const clientModalTitle = document.getElementById('clientModalTitle');
-    const clientModalBody = document.getElementById('clientModalBody');
-    const clientCloseBtn = document.getElementById('clientCloseBtn');
 
     // confirm modal
     const confirmModal = document.getElementById('confirmModal');
@@ -68,13 +55,13 @@ export default function CSVMovimientos() {
     const csvStatusText = document.getElementById('csvStatusText');
     const clearCsvBtn = document.getElementById('clearCsvBtn');
 
-    // Estado in-memory
-    let clients = [];                 // {id,name,perfil}
-    let allFunds = [];                // [{id, clienteId, name}]
-    let fondos = [];                  // fondos del cliente seleccionado (para el modal)
-    let movements = [];               // [{...}]
-    let species = [];                 // [{id,name}]
-    let fundNamesById = new Map();    // fondo_id -> cartera_nombre (derivado de movimientos)
+    // Estado
+    let clients = [];
+    let allFunds = [];
+    let fondos = [];
+    let movements = [];
+    let species = [];
+    let fundNamesById = new Map();
     let openModalEl = null;
     let currentModalClientId = '';
 
@@ -83,47 +70,51 @@ export default function CSVMovimientos() {
     const escapeHtml = (s) => { if (s === 0) return '0'; if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); };
     const formatLocalReadable = (dtStr) => { if (!dtStr) return ''; const d = new Date(dtStr); if (isNaN(d)) return dtStr; const yyyy=d.getFullYear(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); const hh=String(d.getHours()).padStart(2,'0'); const mi=String(d.getMinutes()).padStart(2,'0'); return `${yyyy}-${mm}-${dd} ${hh}:${mi}`; };
 
-    // Fecha UI (datetime-local) -> ISO
     function normalizeDateForAPI(s) {
       if (!s) return null;
       const d = new Date(s);
-      if (!isNaN(d)) return d.toISOString(); // movimiento.fecha_alta (timestamptz)
+      if (!isNaN(d)) return d.toISOString();
       return s;
     }
 
-    // Modal helpers
     function showModal(el){ if(!el) return; el.classList.add('active'); el.setAttribute('aria-hidden','false'); document.documentElement.style.overflow='hidden'; openModalEl = el; }
     function hideModal(el){ if(!el) return; el.classList.remove('active'); el.setAttribute('aria-hidden','true'); document.documentElement.style.overflow=''; if(openModalEl===el) openModalEl=null; }
+    document.addEventListener('keydown', e => { if(e.key==='Escape' && openModalEl) hideModal(openModalEl); });
+
+    // Cierre correcto: por botón (X) y por click en overlay
     function wireModalClose(modalEl){
       if(!modalEl) return;
-      const closeBtn = modalEl.querySelector('.modal-close');
-      closeBtn?.addEventListener('click', ()=> hideModal(modalEl));
-      modalEl.addEventListener('mousedown', e => { if(e.target===modalEl) hideModal(modalEl); });
+      // cerrar con botones dentro del modal
+      modalEl.querySelectorAll('.modal-close, .btn-close, [data-action="close"]').forEach(btn=>{
+        btn.addEventListener('click', (ev)=>{ ev.preventDefault(); hideModal(modalEl); });
+      });
+      // cerrar clickeando fuera del contenido
+      modalEl.addEventListener('mousedown', (ev)=>{
+        if(ev.target === modalEl) hideModal(modalEl);
+      });
     }
-    document.addEventListener('keydown', e => { if(e.key==='Escape' && openModalEl) hideModal(openModalEl); });
+    wireModalClose(movementModal);
+    wireModalClose(confirmModal);
 
     function showConfirm(message){ 
       return new Promise((resolve, reject)=> { 
-      if(!confirmModal) return reject(); 
-      if (confirmMessageEl) confirmMessageEl.textContent = message || 'Confirmar acción'; 
-      showModal(confirmModal); const onOk=()=>{
-        cleanup();
-        resolve(true);
-      }; 
-      const onCancel=()=>{
-        cleanup(); reject(false);
-      }; 
-      const onKey=(e)=>{ if(e.key==='Escape'){ onCancel(); } }; 
-      function cleanup(){ 
-        confirmOkBtn.removeEventListener('click', onOk); 
-        confirmCancelBtn.removeEventListener('click', onCancel); 
-        document.removeEventListener('keydown', onKey); 
-        hideModal(confirmModal);
-      } 
-      confirmOkBtn.addEventListener('click', onOk); 
-      confirmCancelBtn.addEventListener('click', onCancel); 
-      document.addEventListener('keydown', onKey); 
-    }); }
+        if(!confirmModal) return reject(); 
+        if (confirmMessageEl) confirmMessageEl.textContent = message || 'Confirmar acción'; 
+        showModal(confirmModal);
+        const onOk=()=>{ cleanup(); resolve(true); }; 
+        const onCancel=()=>{ cleanup(); reject(false); }; 
+        const onKey=(e)=>{ if(e.key==='Escape'){ onCancel(); } }; 
+        function cleanup(){ 
+          confirmOkBtn.removeEventListener('click', onOk); 
+          confirmCancelBtn.removeEventListener('click', onCancel); 
+          document.removeEventListener('keydown', onKey); 
+          hideModal(confirmModal);
+        } 
+        confirmOkBtn.addEventListener('click', onOk); 
+        confirmCancelBtn.addEventListener('click', onCancel); 
+        document.addEventListener('keydown', onKey); 
+      }); 
+    }
 
     // ===== API =====
     async function apiJSON(url, options) {
@@ -135,13 +126,11 @@ export default function CSVMovimientos() {
       let data = null;
       try { data = await res.json(); } catch {}
       if (!res.ok) {
-        const rawErr = (data && (data.error ?? data.message)) ?? null;
-        const msg =
-          typeof rawErr === 'string'
-            ? rawErr
-            : rawErr && typeof rawErr === 'object'
-            ? (rawErr.message || JSON.stringify(rawErr))
-            : (res.statusText || 'API error');
+        const errObj = data?.error ?? data;
+        const details = (errObj && typeof errObj === 'object')
+          ? [errObj.message, errObj.code, errObj.details].filter(Boolean).join(' - ')
+          : (typeof errObj === 'string' ? errObj : '');
+        const msg = details || res.statusText || 'API error';
         throw new Error(msg);
       }
       return data;
@@ -164,15 +153,13 @@ export default function CSVMovimientos() {
         return arr.map(f => ({
           id: String(f.id_fondo ?? f.id ?? f.fondo_id ?? ''),
           clienteId: String(f.cliente_id ?? f.id_cliente ?? ''),
-          // Preferir el nombre que venga embebido; si no, reemplazamos con lo visto en movimientos
           name:
             f?.tipo_cartera?.descripcion ??
             f?.tipo_cartera_descripcion ??
             f?.nombre ?? f?.name ?? f?.descripcion ?? `Cartera ${f.id ?? ''}`,
         })).filter(f => f.id);
       } catch {
-        // Si no hay endpoint de fondo, lo derivamos de movimientos
-        const set = new Map(); // key: id -> {id, clienteId, name}
+        const set = new Map();
         movements.forEach(m => {
           if (!m.fondoId) return;
           set.set(m.fondoId, {
@@ -204,7 +191,6 @@ export default function CSVMovimientos() {
         });
         return list;
       } catch {
-        // fallback: derivar de movimientos
         const allFunds = await fetchAllFunds();
         const filtered = allFunds.filter(f => f.clienteId === String(clienteId));
         filtered.forEach(f => {
@@ -247,18 +233,14 @@ export default function CSVMovimientos() {
           tipo: mapTipoToUI(r.tipo_mov ?? r.tipo),
           nominal,
           tc: precioUsd ?? 1,
-          obs: '',
         };
       }).filter(x => x.id);
 
-      // Derivar catálogos
       fundNamesById = new Map();
       mapped.forEach(m => { if (m.fondoId && m.fondoName) fundNamesById.set(m.fondoId, m.fondoName); });
 
       const spMap = new Map();
-      mapped.forEach(m => {
-        if (m.especieId && m.especieName) spMap.set(m.especieId, m.especieName);
-      });
+      mapped.forEach(m => { if (m.especieId && m.especieName) spMap.set(m.especieId, m.especieName); });
       species = Array.from(spMap, ([id,name]) => ({ id, name }));
 
       return mapped;
@@ -290,19 +272,18 @@ export default function CSVMovimientos() {
       };
       if (payload.especieId) body.tipo_especie_id = Number(payload.especieId);
       if (!payload.especieId && payload.especieNombre) body.especie = payload.especieNombre;
-      // PATCH a /api/movimiento (el handler espera id en el body)
       return apiJSON('/api/movimiento', { method: 'PATCH', body: JSON.stringify(body) });
     }
 
     async function deleteMovement(id) {
-      // DELETE con body { id }
       return apiJSON('/api/movimiento', { method: 'DELETE', body: JSON.stringify({ id: Number(id) }) });
     }
 
-    // ===== Helpers Disponibilidad =====
-    function signedNominal(m) {
-      return m.tipo === 'Egreso' ? -Number(m.nominal || 0) : Number(m.nominal || 0);
-    }
+    function signedNominal(m) { return m.tipo === 'Egreso' ? -Number(m.nominal || 0) : Number(m.nominal || 0); }
+
+    // Helpers (una sola definición)
+    const getClientById = (id) => clients.find(c => String(c.id)===String(id));
+    const getFundById = (id) => allFunds.find(f => String(f.id)===String(id));
 
     function getAvailableFor(clienteId, fondoId, especieId, especieNombre) {
       if (!clienteId || !fondoId) return 0;
@@ -350,7 +331,6 @@ export default function CSVMovimientos() {
       nominalInput.setAttribute('max', String(Math.max(0, available)));
     }
 
-    // ===== Form helpers =====
     function clearFieldError(el){ if(!el) return; el.classList.remove('invalid'); const err = document.getElementById('error-'+el.id); if(err) err.textContent=''; }
     function showFieldError(el,msg){ if(!el) return; el.classList.add('invalid'); const err = document.getElementById('error-'+el.id); if(err) err.textContent=msg; }
 
@@ -380,7 +360,6 @@ export default function CSVMovimientos() {
       if(!tipo) errors.tipoSelect='Seleccioná tipo.';
       if(!nominalVal || isNaN(nominalNum) || nominalNum<=0 || !Number.isInteger(nominalNum)) errors.nominalInput='Ingresá un nominal entero (>0).';
 
-      // Validar disponible cuando es Egreso
       if (String(tipo).toLowerCase()==='egreso' && clienteId && fondoId && !errors.especieSelect) {
         const available = getAvailableFor(clienteId, fondoId, especieId==='__new__'? null : especieId, especieNombre);
         if (available <= 0) {
@@ -390,15 +369,15 @@ export default function CSVMovimientos() {
         }
       }
 
-      if(errors.clienteSelect) showFieldError(clienteSelect, errors.clienteSelect);
-      if(errors.fondoSelect) showFieldError(fondoSelect, errors.fondoSelect);
-      if(errors.fechaInput) showFieldError(fechaInput, errors.fechaInput);
-      if(errors.tipoSelect) showFieldError(tipoSelect, errors.tipoSelect);
-      if(errors.especieSelect){
-        if(especieSelect.value==='__new__') showFieldError(newEspecieInput, errors.especieSelect);
+      if (errors.clienteSelect) showFieldError(clienteSelect, errors.clienteSelect);
+      if (errors.fondoSelect) showFieldError(fondoSelect, errors.fondoSelect);
+      if (errors.fechaInput) showFieldError(fechaInput, errors.fechaInput);
+      if (errors.tipoSelect) showFieldError(tipoSelect, errors.tipoSelect);
+      if (errors.especieSelect){
+        if (especieSelect.value==='__new__') showFieldError(newEspecieInput, errors.especieSelect);
         else showFieldError(especieSelect, errors.especieSelect);
       }
-      if(errors.nominalInput) showFieldError(nominalInput, errors.nominalInput);
+      if (errors.nominalInput) showFieldError(nominalInput, errors.nominalInput);
 
       return {
         valid:Object.keys(errors).length===0,
@@ -408,7 +387,6 @@ export default function CSVMovimientos() {
           especieNombre,
           nominal: parseInt(nominalNum, 10),
           tc: (tcInput.value==='' ? null : Number(tcInput.value)),
-          obs: obsInput.value||'',
         }
       };
     }
@@ -425,41 +403,49 @@ export default function CSVMovimientos() {
         if (species.length) { especieSelect.selectedIndex=0; newEspecieInput.classList.add('d-none'); newEspecieInput.value=''; }
         else { especieSelect.value='__new__'; newEspecieInput.classList.remove('d-none'); }
       }
-      updateAvailableUI(); // actualizar hint al cambiar especies
+      updateAvailableUI();
     }
 
     function populateFormSelects(selectedSpeciesId){
-      // clientes
       clienteSelect.innerHTML='';
       clients.forEach(c => clienteSelect.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`));
-      // fondos (por cliente)
       const noFunds = fondos.length === 0;
       fondoSelect.innerHTML = noFunds
         ? '<option value="">(Sin carteras para este cliente)</option>'
         : '<option value="">-- Seleccionar cartera --</option>';
       fondos.forEach(f => fondoSelect.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)}</option>`));
       fondoSelect.disabled = noFunds;
-      // especies
       populateSpeciesSelect(selectedSpeciesId);
+    }
+    
+    function refreshFondoSelect() {
+      const noFunds = fondos.length === 0;
+      fondoSelect.innerHTML = noFunds
+        ? '<option value="">(Sin carteras para este cliente)</option>'
+        : '<option value="">-- Seleccionar cartera --</option>';
+      fondos.forEach(f => fondoSelect.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)}</option>`));
+      fondoSelect.disabled = noFunds;
     }
 
     especieSelect.addEventListener('change', () => {
       if(especieSelect.value==='__new__'){
         newEspecieInput.classList.remove('d-none'); newEspecieInput.focus();
       } else {
-        newEspecieInput.classList.add('d-none'); newEspecieInput.value=''; clearFieldError(newEspecieInput);
+        newEspecieInput.classList.add('d-none'); newEspecieInput.value='';
       }
       updateAvailableUI();
     });
-    newEspecieInput.addEventListener('input', () => { 
-      clearFieldError(newEspecieInput);
+    newEspecieInput.addEventListener('input', updateAvailableUI);
+    tipoSelect.addEventListener('change', updateAvailableUI);
+
+
+    fondoSelect.addEventListener('change', updateAvailableUI);
+    // Al cambiar de cliente en el modal, cargar sus carteras
+    clienteSelect.addEventListener('change', async () => {
+      await ensureFundsForClient(clienteSelect.value || '');
+      refreshFondoSelect();
       updateAvailableUI();
     });
-    tipoSelect.addEventListener('change', updateAvailableUI);
-    fondoSelect.addEventListener('change', updateAvailableUI);
-
-    const getClientById = (id) => clients.find(c => String(c.id)===String(id));
-    const getFundById = (id) => fondos.find(f => String(f.id)===String(id));
 
     function groupByClient(movs){
       const map={};
@@ -502,7 +488,7 @@ export default function CSVMovimientos() {
 
         const header=document.createElement('div');
         header.className='client-header';
-        header.innerHTML=`<div class="client-left"><div class="avatar">${client.name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase()}</div><div><div class="client-title">${escapeHtml(client.name)}</div><div className="client-meta">${escapeHtml(client.perfil||'')}</div></div></div><div class="header-actions"><button class="btn" data-action="add" title="Agregar movimiento"><i class="fas fa-plus"></i></button><button class="btn" data-action="toggle" title="Abrir/Cerrar"><i class="fas fa-chevron-down"></i></button></div>`;
+        header.innerHTML=`<div class="client-left"><div class="avatar">${client.name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase()}</div><div><div class="client-title">${escapeHtml(client.name)}</div><div class="client-meta">${escapeHtml(client.perfil||'')}</div></div></div><div class="header-actions"><button class="btn" data-action="add" title="Agregar movimiento"><i class="fas fa-plus"></i></button><button class="btn" data-action="toggle" title="Abrir/Cerrar"><i class="fas fa-chevron-down"></i></button></div>`;
         card.appendChild(header);
 
         const body=document.createElement('div');
@@ -516,8 +502,12 @@ export default function CSVMovimientos() {
             ul.className='fund-list';
             for(const sp of Object.keys(aggregated.carteras[fundName])){
               const nominal=aggregated.carteras[fundName][sp];
-              const li=document.createElement('li');
-              li.innerHTML=`<span>${escapeHtml(sp)}</span><strong>${fmtNumber(nominal)}</strong>`;
+              const li = document.createElement('li');
+              li.innerHTML = `
+                <span class="especie-name">${escapeHtml(sp)}</span>
+                <strong class="especie-qty">${fmtNumber(nominal)}</strong>
+                <span class="especie-value"> - </span>
+              `;
               ul.appendChild(li);
             }
             fundBlock.appendChild(ul);
@@ -539,18 +529,14 @@ export default function CSVMovimientos() {
       const sorted=[...movements].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha)).slice(0, DEFAULT_LAST_N);
       sorted.forEach(m => {
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${formatLocalReadable(m.fecha)}</td><td>${escapeHtml(m.clienteName)}</td><td>${escapeHtml(m.fondoName||'')}</td><td>${escapeHtml(m.especieName)}</td><td>${escapeHtml(m.tipo)}</td><td>${fmtNumber(m.nominal)}</td><td><button class="btn" data-action="edit" data-id="${m.id}" title="Editar"><i class="fas fa-edit"></i></button><button class="btn" data-action="delete" data-id="${m.id}" title="Eliminar"><i className="fas fa-trash"></i></button></td>`;
+        tr.innerHTML=`<td>${formatLocalReadable(m.fecha)}</td><td>${escapeHtml(m.clienteName)}</td><td>${escapeHtml(m.fondoName||'')}</td><td>${escapeHtml(m.especieName)}</td><td>${escapeHtml(m.tipo)}</td><td>${fmtNumber(m.nominal)}</td><td><button class="btn" data-action="edit" data-id="${m.id}" title="Editar"><i class="fas fa-edit"></i></button><button class="btn" data-action="delete" data-id="${m.id}" title="Eliminar"><i class="fas fa-trash"></i></button></td>`;
         lastMovementsTbody.appendChild(tr);
       });
     }
 
     async function ensureFundsForClient(clientId){
       fondos = await fetchFundsForClient(clientId || '');
-      // Forzar nombres reales si hay en movimientos
-      fondos = fondos.map(f => {
-        const seen = fundNamesById.get(f.id);
-        return { ...f, name: seen || f.name };
-      });
+      fondos = fondos.map(f => ({ ...f, name: fundNamesById.get(f.id) || f.name }));
     }
 
     async function openNewMovement(clientId){
@@ -560,7 +546,7 @@ export default function CSVMovimientos() {
       const fallbackSelected = (clienteSelect && clienteSelect.value) ? clienteSelect.value : (clients[0]?.id ?? '');
       const selectedId = clientId ?? fallbackSelected;
 
-      currentModalClientId = String(selectedId || ''); // usar el seleccionado real
+      currentModalClientId = String(selectedId || '');
       movementModalTitle.textContent='Agregar movimiento';
       movementIdInput.value='';
 
@@ -568,7 +554,6 @@ export default function CSVMovimientos() {
       populateFormSelects();
 
       if (currentModalClientId) { clienteSelect.value = currentModalClientId; }
-      // Limpiar selección de cartera para mostrar placeholder si corresponde
       fondoSelect.value='';
 
       fechaInput.value=new Date().toISOString().slice(0,16);
@@ -582,7 +567,6 @@ export default function CSVMovimientos() {
 
       nominalInput.value='';
       tcInput.value='';
-      obsInput.value='';
       updateAvailableUI();
       showModal(movementModal);
     }
@@ -610,12 +594,10 @@ export default function CSVMovimientos() {
 
       nominalInput.value=m.nominal;
       tcInput.value=m.tc ?? '';
-      obsInput.value=m.obs||'';
       updateAvailableUI();
       showModal(movementModal);
     }
 
-    // Guardar
     movementSaveBtn.addEventListener('click', async () => {
       const {valid, cleaned} = validateMovementForm();
       if(!valid) return;
@@ -640,17 +622,15 @@ export default function CSVMovimientos() {
 
         hideModal(movementModal);
 
-        // Recargar datos
+        // Recargar datos y mantener todos los nombres de carteras disponibles
         movements = await fetchMovements();
         allFunds = await fetchAllFunds();
+        allFunds = allFunds.map(f => ({ ...f, name: fundNamesById.get(f.id) || f.name }));
 
-        if (currentModalClientId) {
-          fondos = await fetchFundsForClient(currentModalClientId);
-        } else {
-          fondos = [];
-        }
+        // Si el usuario cambió de cliente en el modal, reflejarlo
+        currentModalClientId = cleaned.clienteId || currentModalClientId || '';
+        fondos = await fetchFundsForClient(currentModalClientId);
 
-        populateFormSelects();
         renderClients(searchInput.value||'');
         renderLastMovements();
         applyStoredCSVValues();
@@ -661,60 +641,70 @@ export default function CSVMovimientos() {
     });
     movementCancelBtn.addEventListener('click', () => hideModal(movementModal));
 
-    // Acciones en tarjetas
-    clientsContainer.addEventListener('click', (e) => {
-      const btn = e.target.closest('button'); if(!btn) return; const action=btn.dataset.action; const card = btn.closest('.client-card');
-      if(action==='toggle'){ const body=card.querySelector('.client-body'); if(body){ body.style.display = body.style.display==='none' ? 'block':'none'; }
-      } else if(action==='add'){ openNewMovement(card.dataset.clientId); }
-      else if(action==='detail'){ openClientDetail(card.dataset.clientId); }
-    });
-
-    clientCloseBtn.addEventListener('click', () => hideModal(clientModal));
-
-    // Acciones tabla
-    lastMovementsTbody.addEventListener('click', async (e) => {
-      const btn=e.target.closest('button'); if(!btn) return; const id=btn.dataset.id; const action=btn.dataset.action;
-      if(action==='edit'){ openEditMovement(id); }
-      else if(action==='delete'){
-        try {
-          await showConfirm('¿Eliminar movimiento?');
-          await deleteMovement(id);
-          movements = await fetchMovements();
-          allFunds = await fetchAllFunds();
-          if (currentModalClientId) {
-            fondos = await fetchFundsForClient(currentModalClientId);
-          } else {
-            fondos = [];
-          }
-          renderClients(searchInput.value||'');
-          renderLastMovements();
-          applyStoredCSVValues();
-        } catch {}
+    searchInput?.addEventListener('input', () => { renderClients(searchInput.value||''); applyStoredCSVValues(); });
+    openAddBtn?.addEventListener('click', () => openNewMovement());
+    clientsContainer?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const card = btn.closest('.client-card');
+      if (!card) return;
+      const action = btn.dataset.action;
+      if (action === 'toggle') {
+        const body = card.querySelector('.client-body');
+        if (body) {
+          const hidden = body.style.display === 'none' || getComputedStyle(body).display === 'none';
+          body.style.display = hidden ? 'block' : 'none';
+        }
+      } else if (action === 'add') {
+        const clientId = card.dataset.clientId || '';
+        openNewMovement(clientId);
       }
     });
-
-    // Cambio de cliente en modal => actualizar fondos
-    clienteSelect.addEventListener('change', async () => {
-      const sel = clienteSelect.value;
-      currentModalClientId = String(sel || '');
-      await ensureFundsForClient(sel);
-      const keepSpeciesId = (especieSelect.value && especieSelect.value !== '__new__') ? especieSelect.value : undefined;
-      populateFormSelects(keepSpeciesId);
-      clienteSelect.value = sel;
-      updateAvailableUI();
-    });
-
-    searchInput.addEventListener('input', () => { renderClients(searchInput.value||''); applyStoredCSVValues(); });
-    openAddBtn.addEventListener('click', () => openNewMovement());
-
-    wireModalClose(movementModal); wireModalClose(clientModal); wireModalClose(confirmModal);
-
-    // ===== CSV (nueva lógica: agrega y persiste precios) =====
+    
+    lastMovementsTbody?.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (!id) return;
+      if (action === 'edit') {
+        openEditMovement(id);
+        return;
+      }
+      if (action === 'delete') {
+        try {
+          await showConfirm('¿Eliminar este movimiento?');
+          await deleteMovement(id);
+          // Recargar datos y refrescar UI
+          movements = await fetchMovements();
+          renderClients(searchInput?.value || '');
+          renderLastMovements();
+          applyStoredCSVValues();
+        } catch (err) {
+          // Cancelado o error
+          if (err && err !== false) {
+            console.error(err);
+            alert('Error eliminando movimiento: ' + (err.message || err));
+          }
+        }
+      }
+    });    
+    
+    // ===== CSV =====
     function normalizeName(s){ if(!s) return ''; return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s\.,_\-"'()\/\\]+/g,'').replace(/[^a-z0-9]/g,'').trim(); }
     function parseNumber(s){ if(s===null||s===undefined) return NaN; let t=String(s).trim(); if(t==='') return NaN; t=t.replace(/\u00A0/g,' ').replace(/\$/g,'').replace(/\s/g,''); const hasDot=t.indexOf('.')!==-1; const hasComma=t.indexOf(',')!==-1; if(hasDot && hasComma){ if(t.indexOf('.') < t.indexOf(',')) t=t.replace(/\./g,'').replace(',', '.'); else t=t.replace(/,/g,''); } else if(hasComma && !hasDot){ t=t.replace(',', '.'); } t=t.replace(/[^0-9\.\-]/g,''); const v=parseFloat(t); return isFinite(v)? v: NaN; }
-
     function detectDelimiter(text){ const lines=text.split(/\r?\n/).filter(l=>l.trim().length>0).slice(0,8); let comma=0, semi=0, tab=0; lines.forEach(l=> { comma += (l.match(/,/g)||[]).length; semi += (l.match(/;/g)||[]).length; tab += (l.match(/\t/g)||[]).length; }); if(semi>comma && semi>=tab) return ';'; if(tab>comma && tab>=semi) return '\t'; return ','; }
     function splitCsvLine(line, delim){ const res=[]; let cur=''; let inQ=false; for(let i=0;i<line.length;i++){ const ch=line[i]; if(ch==='"'){ if(inQ && i+1<line.length && line[i+1]==='"'){ cur+='"'; i++; } else { inQ=!inQ; } } else if(ch===delim && !inQ){ res.push(cur); cur=''; } else { cur+=ch; } } res.push(cur); return res.map(c=>c.trim()); }
+
+    function parseLocaleInteger(s){
+      if (s == null) return 0;
+      const str = String(s);
+      const sign = str.trim().startsWith('-') ? -1 : 1;
+      const digits = str.replace(/[^\d]/g, ''); // quita , . espacios, NBSP, etc.
+      if (!digits) return 0;
+      const n = parseInt(digits, 10);
+      return Number.isFinite(n) ? sign * n : 0;
+    }
 
     function extractDateFromFilename(name) {
       if (!name) return new Date().toISOString().slice(0, 10);
@@ -725,29 +715,31 @@ export default function CSVMovimientos() {
       return new Date().toISOString().slice(0, 10);
     }
 
-    // Parsea CSV con cabeceras: Instrumento, Monto total, Cantidad, Moneda
+    // Cabeceras: Instrumento, Monto total, Cantidad[, Moneda]
     function parseTenenciasCSV(text){
       const delim=detectDelimiter(text);
       const rawLines=text.split(/\r?\n/).filter(l=>l.trim().length>0);
       if(rawLines.length===0) return [];
       const header=splitCsvLine(rawLines[0],delim).map(h=>h.trim().toLowerCase());
+
       const colInst = header.findIndex(h => h.includes('instrumento'));
       const colMonto = header.findIndex(h => h.includes('monto'));
       const colCant = header.findIndex(h => h.includes('cant'));
-      const colMoneda = header.findIndex(h => h.includes('moneda'));
-      if(colInst===-1 || colMonto===-1 || colCant===-1 || colMoneda===-1){
-        throw new Error('Cabecera CSV inválida. Se espera: Instrumento, Monto total, Cantidad, Moneda');
+      const colMoneda = header.findIndex(h => h.includes('moneda')); // opcional
+
+      if(colInst===-1 || colMonto===-1 || colCant===-1){
+        throw new Error('Cabecera CSV inválida. Se espera: Instrumento, Monto total, Cantidad[, Moneda]');
       }
+
       const rows=[];
       for(let i=1;i<rawLines.length;i++){
         const cols=splitCsvLine(rawLines[i],delim);
-        if(cols.length<=Math.max(colInst,colMonto,colCant,colMoneda)) continue;
+        if(cols.length<=Math.max(colInst,colMonto,colCant)) continue;
         const instrumento=(cols[colInst]||'').trim();
-        const moneda=(cols[colMoneda]||'').trim().toUpperCase();
         const monto=parseNumber(cols[colMonto]);
         const cantidad=parseNumber(cols[colCant]);
+        const moneda = colMoneda===-1 ? '' : (cols[colMoneda]||'').trim().toUpperCase();
         if(!instrumento) continue;
-        if(!moneda) continue; // FIX: evitar items sin moneda (rompen el schema del API)
         if(!isFinite(monto) || !isFinite(cantidad)) continue;
         rows.push({ instrumento, monto, cantidad, moneda });
       }
@@ -755,37 +747,46 @@ export default function CSVMovimientos() {
     }
 
     function aggregatePrices(rows){
-      const byKey = new Map(); // key: instrumento|moneda
+      const byKey = new Map(); // key: instrumento
       const isCash = (inst) => ['ARS','USD','USDC','USD.C'].includes(String(inst).toUpperCase());
       for(const r of rows){
         const inst = String(r.instrumento||'').trim();
-        const mon = String(r.moneda||'').trim().toUpperCase();
-        if(!inst || isCash(inst) || !mon) continue; // FIX: no acumular sin moneda
+        if(!inst || isCash(inst)) continue;
         const qty = Number(r.cantidad)||0;
         const amt = Number(r.monto)||0;
         if(qty <= 0 || !isFinite(qty) || !isFinite(amt)) continue;
-        const key = `${inst}|${mon}`;
+        const key = inst;
         const prev = byKey.get(key) || { totalMonto:0, totalCantidad:0 };
         prev.totalMonto += amt;
         prev.totalCantidad += qty;
         byKey.set(key, prev);
       }
       const items=[];
-      for(const [key,val] of byKey){
+      for(const [instrumento,val] of byKey){
         if(val.totalCantidad<=0) continue;
-        const [instrumento, moneda] = key.split('|');
-        items.push({ instrumento, moneda, precio: val.totalMonto/val.totalCantidad });
+        items.push({ instrumento, precio: val.totalMonto/val.totalCantidad });
       }
       return items.sort((a,b)=> a.instrumento.localeCompare(b.instrumento,'es'));
     }
 
-    // Mapea items a un diccionario normalizado para UI (clave = normalizeName(instrumento))
+    // Sanitiza items antes de enviar (precio > 0 y finito)
+    function sanitizeItems(items){
+      const cleaned = [];
+      let dropped = 0;
+      for(const it of items){
+        const nombre = (it.instrumento||'').trim();
+        const precio = Number(it.precio);
+        if(!nombre || !Number.isFinite(precio) || precio <= 0){ dropped++; continue; }
+        cleaned.push({ instrumento: nombre, precio });
+      }
+      return { cleaned, dropped };
+    }
+
     function itemsToMapping(items){
       const map = {};
       for(const it of items){
         const k = normalizeName(it.instrumento);
         if(k) map[k] = Number(it.precio);
-        // variantes simples tipo sufijo 'd' (ej: CEDEARs)
         if(k && !k.endsWith('d')) map[`${k}d`] = Number(it.precio);
       }
       return map;
@@ -795,109 +796,104 @@ export default function CSVMovimientos() {
 
     function updateValuesFromMapping(mapping){
       if(!clientsContainer) return;
-      const clientCards=clientsContainer.querySelectorAll('.client-card');
-      let globalTotal=0;
+      const clientCards = clientsContainer.querySelectorAll('.client-card');
+      let globalTotal = 0;
+
       clientCards.forEach(card => {
-        let clientTotal=0;
-        const header=card.querySelector('.client-header .client-left');
-        if(header && !header.querySelector('.client-total')){
-          const div=document.createElement('div');
-          div.className='client-total';
-          div.style.marginLeft='12px';
-          div.style.fontWeight='600';
-          div.textContent='$ 0';
+        let clientTotal = 0;
+
+        // total por cliente en el header
+        const header = card.querySelector('.client-header .client-left');
+        if (header && !header.querySelector('.client-total')) {
+          const div = document.createElement('div');
+          div.className = 'client-total';
+          div.textContent = '$ 0';
           header.appendChild(div);
         }
-        const lis=card.querySelectorAll('.fund-list li');
-        lis.forEach(li => {
-          const nameEl=li.querySelector('span');
-          const nomEl=li.querySelector('strong');
-          if(!nameEl||!nomEl) return;
-          const displayName=nameEl.textContent.trim();
-          const nominalRaw=nomEl.textContent||'0';
-          const nominal=parseNumber(nominalRaw);
-          const normName=normalizeName(displayName);
-          let price=undefined;
-          if(mapping[normName]!==undefined) price=mapping[normName];
-          if(price===undefined){
-            if(normName.endsWith('d')){
-              const v=normName.slice(0,-1);
-              if(mapping[v]!==undefined) price=mapping[v];
+
+        // Soportar ambas estructuras: tabla (.fund-table) o lista (.fund-list)
+        const rows = card.querySelectorAll('.fund-table tbody tr, .fund-list li');
+
+        rows.forEach(row => {
+          // Resolver nombre, cantidad y celda de valor según el tipo de nodo
+          const isTr = row.tagName === 'TR';
+          const nameEl = row.querySelector('.especie-name') || row.querySelector('span');
+          const qtyEl  = row.querySelector('.especie-qty')  || row.querySelector('strong');
+          let valueEl  = row.querySelector('.especie-value');
+
+          if(!nameEl || !qtyEl) return;
+
+          const displayName = (nameEl.textContent || '').trim();
+          const nominal = parseLocaleInteger(qtyEl.textContent || '0');
+          const normName = normalizeName(displayName);
+
+          // Buscar precio en el mapping (mantiene tu lógica actual)
+          let price = undefined;
+          if (mapping) {
+            // intenta por nombre normalizado y por nombre exacto
+            price = mapping[normName];
+            if (price === undefined) price = mapping[displayName];
+          }
+
+          // Crear el elemento de valor si no existe (sin romper la grilla/tabla)
+          if (!valueEl) {
+            if (isTr) {
+              valueEl = document.createElement('td');
+              valueEl.className = 'especie-value num';
+              row.appendChild(valueEl);
             } else {
-              const v=normName+'d';
-              if(mapping[v]!==undefined) price=mapping[v];
+              valueEl = document.createElement('span');
+              valueEl.className = 'especie-value';
+              row.appendChild(valueEl);
             }
           }
-          if(price===undefined){
-            for(const k of Object.keys(mapping)){
-              if(k.includes(normName)||normName.includes(k)){ price=mapping[k]; break;}
-            }
-          }
-          if(price===undefined){
-            const tokens=displayName.split(/\s+/).map(t=>normalizeName(t)).filter(Boolean);
-            for(const tok of tokens){
-              if(mapping[tok]!==undefined){ price=mapping[tok]; break;}
-              if(!tok.endsWith('d') && mapping[tok+'d']!==undefined){ price=mapping[tok+'d']; break;}
-            }
-          }
-          const value=(isNaN(price)||price===undefined)? NaN: (Number(nominal)*Number(price));
-          let valueEl=li.querySelector('.especie-value');
-          if(!valueEl){
-            valueEl=document.createElement('span');
-            valueEl.className='especie-value';
-            valueEl.style.marginLeft='8px';
-            valueEl.style.fontWeight='600';
-            li.appendChild(valueEl);
-          }
-          if(isNaN(value)){
-            valueEl.textContent=' - ';
+
+          const value = (isNaN(price) || price === undefined)
+            ? NaN
+            : Number(nominal) * Number(price);
+
+          if (isNaN(value)) {
+            valueEl.textContent = ' - ';
           } else {
-            valueEl.textContent='$ '+Number(value).toLocaleString(undefined,{maximumFractionDigits:2});
-            clientTotal+=Number(value);
+            valueEl.textContent = '$ ' + Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+            clientTotal += Number(value);
           }
         });
-        const clientTotalEl=card.querySelector('.client-total');
-        if(clientTotalEl) clientTotalEl.textContent='$ '+Number(clientTotal).toLocaleString(undefined,{maximumFractionDigits:2});
-        globalTotal+=clientTotal;
+
+        const clientTotalEl = card.querySelector('.client-total');
+        if (clientTotalEl) {
+          clientTotalEl.textContent = '$ ' + Number(clientTotal).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        }
+        globalTotal += clientTotal;
       });
-      if(summaryNominalEl) summaryNominalEl.textContent='$ '+Number(globalTotal).toLocaleString(undefined,{maximumFractionDigits:2});
+
+      if (summaryNominalEl) {
+        summaryNominalEl.textContent = '$ ' + Number(globalTotal).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      }
     }
 
-    // Observador para aplicar precios luego de render
     const mo = new MutationObserver(() => { applyStoredCSVValues(); });
     if(clientsContainer) mo.observe(clientsContainer,{childList:true,subtree:true});
 
-    // Exponer para debug
     window.__movementsApp = {
       async reload(){
         movements = await fetchMovements();
         allFunds = await fetchAllFunds();
         fondos = allFunds.slice();
-        renderClients(searchInput.value||''); renderLastMovements(); applyStoredCSVValues();
+        renderClients(searchInput?.value||''); renderLastMovements(); applyStoredCSVValues();
       }
     };
 
-    // ===== Carga inicial =====
     (async () => {
       try { clients = await fetchClients(); } catch (e) { console.error('Error clientes', e); clients = []; }
-
       try { movements = await fetchMovements(); } catch (e) { console.error('Error movimientos', e); movements = []; }
+      try { allFunds = await fetchAllFunds(); } catch (e) { console.error('Error fondos', e); allFunds = []; }
 
-      try {
-        allFunds = await fetchAllFunds();
-      } catch (e) {
-        console.error('Error fondos', e);
-        allFunds = [];
-      }
+      allFunds = allFunds.map(f => ({ ...f, name: fundNamesById.get(f.id) || f.name }));
+      fondos = allFunds.slice();
 
-      // Inicial: sin cliente en modal => todos los fondos (con nombre real visto)
-      fondos = allFunds.map(f => ({ ...f, name: fundNamesById.get(f.id) || f.name }));
-
-      // Render
-      // Clientes al select
-      clienteSelect.innerHTML='';
-      clients.forEach(c => clienteSelect.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`));
-      // Especies desde movimientos
+      clienteSelect && (clienteSelect.innerHTML='');
+      clients.forEach(c => clienteSelect?.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`));
       const spSelected = species[0]?.id;
       populateFormSelects(spSelected);
       renderClients();
@@ -906,7 +902,6 @@ export default function CSVMovimientos() {
       updateAvailableUI();
     })();
 
-    // ===== Eventos CSV =====
     if(csvUploadBtn && csvFileInput){
       csvUploadBtn.addEventListener('click', ()=> csvFileInput.click());
       clearCsvBtn.addEventListener('click', ()=> {
@@ -923,29 +918,30 @@ export default function CSVMovimientos() {
           if (csvStatusText) csvStatusText.textContent = 'Procesando CSV...';
           const text = await f.text();
           const rawRows = parseTenenciasCSV(text);
-          const items = aggregatePrices(rawRows); // [{instrumento, moneda, precio}]
-          if(items.length===0){
-            alert('No se detectaron precios válidos en el CSV (Instrumento/Monto/Cantidad/Moneda).');
+          const items = aggregatePrices(rawRows); // [{instrumento, precio}]
+          const { cleaned, dropped } = sanitizeItems(items);
+
+          if(cleaned.length===0){
+            alert('No se detectaron precios válidos en el CSV (precios deben ser > 0).');
             if (csvStatusText) csvStatusText.textContent = 'Sin precios válidos';
             return;
           }
           const fecha = extractDateFromFilename(f.name);
 
-          // Persistir en la base vía /api/movimiento (acción upsertPrecios)
           await apiJSON('/api/movimiento', {
             method: 'POST',
             body: JSON.stringify({
               action: 'upsertPrecios',
               fecha,
               fuente: 'inviu_csv',
-              items: items.map(it => ({ instrumento: it.instrumento, moneda: it.moneda, precio: it.precio })),
+              items: cleaned, // solo válidos
             }),
           });
 
-          // Guardar mapping local y aplicar a la UI
-          const mapping = itemsToMapping(items);
+          const mapping = itemsToMapping(cleaned);
           localStorage.setItem(CSV_KEY, JSON.stringify(mapping));
-          if (csvStatusText) csvStatusText.textContent = `Precios guardados (${items.length}) — ${fecha}`;
+          const msg = `Precios guardados (${cleaned.length}${dropped?`, descartados: ${dropped}`:''}) — ${fecha}`;
+          if (csvStatusText) csvStatusText.textContent = msg;
           clearCsvBtn.style.display='inline-block';
           applyStoredCSVValues();
           alert('Precios guardados correctamente.');
@@ -979,8 +975,9 @@ export default function CSVMovimientos() {
           <button id="openAddBtn" className="btn primary"><i className="fas fa-plus" /> Agregar Movimiento</button>
         </div>
       </header>
+
       <main className="content-area">
-        <section id="clientsContainer" className="clients-container" aria-live="polite" />
+        <section id="clientsContainer" className="clients-container" aria-live="polite"></section>
         <section className="last-movements-section">
           <h2>Últimos movimientos</h2>
             <div className="table-wrap">
@@ -990,7 +987,7 @@ export default function CSVMovimientos() {
                     <th>Fecha</th><th>Cliente</th><th>Cartera</th><th>Especie</th><th>Tipo</th><th>Nominal</th><th>Acciones</th>
                   </tr>
                 </thead>
-                <tbody id="lastMovementsTbody" />
+                <tbody id="lastMovementsTbody"></tbody>
               </table>
             </div>
         </section>
@@ -1008,12 +1005,12 @@ export default function CSVMovimientos() {
             <div className="form-grid">
               <div className="form-group">
                 <label htmlFor="clienteSelect">Cliente <span className="required">*</span></label>
-                <select id="clienteSelect" />
+                <select id="clienteSelect"></select>
                 <div className="error-message" id="error-clienteSelect" />
               </div>
               <div className="form-group">
                 <label htmlFor="fondoSelect">Cartera <span className="required">*</span></label>
-                <select id="fondoSelect" />
+                <select id="fondoSelect"></select>
                 <div className="error-message" id="error-fondoSelect" />
               </div>
               <div className="form-group">
@@ -1032,7 +1029,7 @@ export default function CSVMovimientos() {
               <div className="form-group">
                 <label htmlFor="especieSelect">Especie <span className="required">*</span></label>
                 <div className="input-with-side">
-                  <select id="especieSelect" />
+                  <select id="especieSelect"></select>
                   <input id="newEspecieInput" className="d-none" placeholder="Nombre nueva especie..." />
                 </div>
                 <div className="error-message" id="error-especieSelect" />
@@ -1048,10 +1045,6 @@ export default function CSVMovimientos() {
                 <input id="tcInput" type="number" min="0" step="any" placeholder="1.00" />
                 <div className="error-message" id="error-tcInput" />
               </div>
-              <div className="form-group form-span-2">
-                <label htmlFor="obsInput">Observaciones (no se guarda)</label>
-                <textarea id="obsInput" rows={3} />
-              </div>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn-save" id="movementSaveBtn">
@@ -1063,26 +1056,48 @@ export default function CSVMovimientos() {
         </div></div>
       </div>
 
-      {/* Modal Cliente */}
-      <div className="modal" id="clientModal" aria-hidden="true">
-        <div className="modal-dialog"><div className="modal-content">
-          <div className="modal-header"><h3 id="clientModalTitle">Cliente</h3><button className="modal-close btn-close" aria-label="Cerrar"><i className="fas fa-times" /></button></div>
-          <div className="modal-body" id="clientModalBody" />
-          <div className="modal-footer">
-            <button className="btn-close" id="clientCloseBtn">
-              <i className="fas fa-times" /> Cerrar</button>
-          </div>
-        </div></div>
-      </div>
-
       {/* Modal Confirm */}
       <div className="modal" id="confirmModal" aria-hidden="true">
         <div className="modal-dialog"><div className="modal-content">
           <div className="modal-header"><h3 id="confirmTitle">Confirmar</h3></div>
           <div className="modal-body"><p id="confirmMessage">¿Confirmar?</p></div>
           <div className="modal-footer"><button className="btn primary" id="confirmOkBtn">Confirmar</button><button className="btn" id="confirmCancelBtn">Cancelar</button></div>
-        </div></div>
+          </div></div>
       </div>
+      <style jsx global>{`
+        .fund-table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed; /* colgroup manda */
+        }
+        .fund-table col.col-name { width: auto; }
+        .fund-table col.col-qty { width: 12ch; }
+        .fund-table col.col-value { width: 14ch; }
+
+        .fund-table td {
+          padding: 8px 12px;
+          vertical-align: middle;
+        }
+        .fund-table .especie-name {
+          display: block;         /* permite ellipsis dentro del td */
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .fund-table .num {
+          text-align: right;
+          white-space: nowrap;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums; /* números alineados */
+        }
+
+        /* Evitar que el total del header se achique o se recorte */
+        .client-header .client-total {
+          white-space: nowrap;
+          flex: 0 0 auto;
+        }
+      `}</style>
     </div>
   );
 }
