@@ -25,6 +25,7 @@ export default function CSVMovimientos() {
     const summaryNominalEl = document.getElementById('summaryNominal');
     const clientsContainer = document.getElementById('clientsContainer');
     const lastMovementsTbody = document.getElementById('lastMovementsTbody');
+    const lastMovSearchInput = document.getElementById('lastMovSearchInput');
 
     // form refs
     const movementModal = document.getElementById('movementModal');
@@ -68,8 +69,23 @@ export default function CSVMovimientos() {
 
     // Utils
     const fmtNumber = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
-    const escapeHtml = (s) => { if (s === 0) return '0'; if (!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); };
-    const formatLocalReadable = (dtStr) => { if (!dtStr) return ''; const d = new Date(dtStr); if (isNaN(d)) return dtStr; const yyyy=d.getFullYear(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); const hh=String(d.getHours()).padStart(2,'0'); const mi=String(d.getMinutes()).padStart(2,'0'); return `${yyyy}-${mm}-${dd} ${hh}:${mi}`; };
+    const escapeHtml = (s) => {
+      if (s === 0) return '0';
+      if (!s) return '';
+      return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[m]));
+    };
+    const formatLocalReadable = (dtStr) => {
+      if (!dtStr) return '';
+      const d = new Date(dtStr);
+      if (isNaN(d)) return dtStr;
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+    };
+    const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
     function normalizeDateForAPI(s) {
       if (!s) return null;
@@ -78,52 +94,52 @@ export default function CSVMovimientos() {
       return s;
     }
 
-    function showModal(el){ if(!el) return; el.classList.add('active'); el.setAttribute('aria-hidden','false'); document.documentElement.style.overflow='hidden'; openModalEl = el; }
-    function hideModal(el){ if(!el) return; el.classList.remove('active'); el.setAttribute('aria-hidden','true'); document.documentElement.style.overflow=''; if(openModalEl===el) openModalEl=null; }
-    document.addEventListener('keydown', e => { if(e.key==='Escape' && openModalEl) hideModal(openModalEl); });
+    function showModal(el) { if (!el) return; el.classList.add('active'); el.setAttribute('aria-hidden', 'false'); document.documentElement.style.overflow = 'hidden'; openModalEl = el; }
+    function hideModal(el) { if (!el) return; el.classList.remove('active'); el.setAttribute('aria-hidden', 'true'); document.documentElement.style.overflow = ''; if (openModalEl === el) openModalEl = null; }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && openModalEl) hideModal(openModalEl); });
 
     // Cierre correcto: por botón (X) y por click en overlay
-    function wireModalClose(modalEl){
-      if(!modalEl) return;
-      modalEl.querySelectorAll('.modal-close, .btn-close, [data-action="close"]').forEach(btn=>{
-        btn.addEventListener('click', (ev)=>{ ev.preventDefault(); hideModal(modalEl); });
+    function wireModalClose(modalEl) {
+      if (!modalEl) return;
+      modalEl.querySelectorAll('.modal-close, .btn-close, [data-action="close"]').forEach(btn => {
+        btn.addEventListener('click', (ev) => { ev.preventDefault(); hideModal(modalEl); });
       });
-      modalEl.addEventListener('mousedown', (ev)=>{
-        if(ev.target === modalEl) hideModal(modalEl);
+      modalEl.addEventListener('mousedown', (ev) => {
+        if (ev.target === modalEl) hideModal(modalEl);
       });
     }
     wireModalClose(movementModal);
     wireModalClose(confirmModal);
 
-    function showConfirm(message){ 
-      return new Promise((resolve, reject)=> { 
-        if(!confirmModal) return reject(); 
-        if (confirmMessageEl) confirmMessageEl.textContent = message || 'Confirmar acción'; 
+    function showConfirm(message) {
+      return new Promise((resolve, reject) => {
+        if (!confirmModal) return reject();
+        if (confirmMessageEl) confirmMessageEl.textContent = message || 'Confirmar acción';
         showModal(confirmModal);
-        const onOk=()=>{ cleanup(); resolve(true); }; 
-        const onCancel=()=>{ cleanup(); reject(false); }; 
-        const onKey=(e)=>{ if(e.key==='Escape'){ onCancel(); } }; 
-        function cleanup(){ 
-          confirmOkBtn.removeEventListener('click', onOk); 
-          confirmCancelBtn.removeEventListener('click', onCancel); 
-          document.removeEventListener('keydown', onKey); 
+        const onOk = () => { cleanup(); resolve(true); };
+        const onCancel = () => { cleanup(); reject(false); };
+        const onKey = (e) => { if (e.key === 'Escape') { onCancel(); } };
+        function cleanup() {
+          confirmOkBtn.removeEventListener('click', onOk);
+          confirmCancelBtn.removeEventListener('click', onCancel);
+          document.removeEventListener('keydown', onKey);
           hideModal(confirmModal);
-        } 
-        confirmOkBtn.addEventListener('click', onOk); 
-        confirmCancelBtn.addEventListener('click', onCancel); 
-        document.addEventListener('keydown', onKey); 
-      }); 
+        }
+        confirmOkBtn.addEventListener('click', onOk);
+        confirmCancelBtn.addEventListener('click', onCancel);
+        document.addEventListener('keydown', onKey);
+      });
     }
 
     // ===== API =====
     async function apiJSON(url, options) {
       const res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json', ...(options?.headers||{}) },
+        headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
         cache: 'no-store',
         ...options,
       });
       let data = null;
-      try { data = await res.json(); } catch {}
+      try { data = await res.json(); } catch { }
       if (!res.ok) {
         const errObj = data?.error ?? data;
         const details = (errObj && typeof errObj === 'object')
@@ -190,8 +206,8 @@ export default function CSVMovimientos() {
         });
         return list;
       } catch {
-        const allFunds = await fetchAllFunds();
-        const filtered = allFunds.filter(f => f.clienteId === String(clienteId));
+        const allFundsLocal = await fetchAllFunds();
+        const filtered = allFundsLocal.filter(f => f.clienteId === String(clienteId));
         filtered.forEach(f => {
           const seen = fundNamesById.get(f.id);
           if (seen) f.name = seen;
@@ -222,7 +238,7 @@ export default function CSVMovimientos() {
         const precioUsd = r.precio_usd == null ? null : Number(r.precio_usd);
         return {
           id,
-          fecha: fecha ? new Date(fecha).toISOString().slice(0,16) : new Date().toISOString().slice(0,16),
+          fecha: fecha ? new Date(fecha).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
           clienteId,
           clienteName: r.cliente_nombre ?? '',
           fondoId,
@@ -238,12 +254,9 @@ export default function CSVMovimientos() {
       fundNamesById = new Map();
       mapped.forEach(m => { if (m.fondoId && m.fondoName) fundNamesById.set(m.fondoId, m.fondoName); });
 
-      const spMap = new Map();
-      mapped.forEach(m => { if (m.aspecieId && m.especieName) spMap.set(m.especieId, m.especieName); });
-      // Nota: si el join ya viene, conservamos species por id/nombre de movimientos existentes
       const spMap2 = new Map();
       mapped.forEach(m => { if (m.especieId || m.especieName) spMap2.set(m.especieId || m.especieName, m.especieName || String(m.especieId)); });
-      species = Array.from(spMap2, ([id,name]) => ({ id, name }));
+      species = Array.from(spMap2, ([id, name]) => ({ id, name }));
 
       return mapped;
     }
@@ -264,7 +277,6 @@ export default function CSVMovimientos() {
 
     async function updateMovement(id, payload) {
       const body = {
-        id: Number(id),
         cliente_id: Number(payload.clienteId),
         fondo_id: Number(payload.fondoId),
         fecha_alta: normalizeDateForAPI(payload.fecha),
@@ -274,7 +286,7 @@ export default function CSVMovimientos() {
       };
       if (payload.especieId) body.tipo_especie_id = Number(payload.especieId);
       if (!payload.especieId && payload.especieNombre) body.especie = payload.especieNombre;
-      return apiJSON('/api/movimiento', { method: 'PATCH', body: JSON.stringify(body) });
+      return apiJSON('/api/movimiento', { method: 'PATCH', body: JSON.stringify({ id: Number(id), ...body }) });
     }
 
     async function deleteMovement(id) {
@@ -284,8 +296,8 @@ export default function CSVMovimientos() {
     function signedNominal(m) { return m.tipo === 'Egreso' ? -Number(m.nominal || 0) : Number(m.nominal || 0); }
 
     // Helpers (una sola definición)
-    const getClientById = (id) => clients.find(c => String(c.id)===String(id));
-    const getFundById = (id) => allFunds.find(f => String(f.id)===String(id));
+    const getClientById = (id) => clients.find(c => String(c.id) === String(id));
+    const getFundById = (id) => allFunds.find(f => String(f.id) === String(id));
 
     function getAvailableFor(clienteId, fondoId, especieId, especieNombre) {
       if (!clienteId || !fondoId) return 0;
@@ -333,37 +345,37 @@ export default function CSVMovimientos() {
       nominalInput.setAttribute('max', String(Math.max(0, available)));
     }
 
-    function clearFieldError(el){ if(!el) return; el.classList.remove('invalid'); const err = document.getElementById('error-'+el.id); if(err) err.textContent=''; }
-    function showFieldError(el,msg){ if(!el) return; el.classList.add('invalid'); const err = document.getElementById('error-'+el.id); if(err) err.textContent=msg; }
+    function clearFieldError(el) { if (!el) return; el.classList.remove('invalid'); const err = document.getElementById('error-' + el.id); if (err) err.textContent = ''; }
+    function showFieldError(el, msg) { if (!el) return; el.classList.add('invalid'); const err = document.getElementById('error-' + el.id); if (err) err.textContent = msg; }
 
-    function validateMovementForm(){
+    function validateMovementForm() {
       [clienteSelect, fondoSelect, fechaInput, tipoSelect, especieSelect, newEspecieInput, nominalInput, tcInput].forEach(clearFieldError);
-      const errors={};
-      const clienteId=clienteSelect.value;
-      const fondoId=fondoSelect.value;
-      const fecha=fechaInput.value;
-      const tipo=tipoSelect.value;
-      let especieId=especieSelect.value;
-      let especieNombre=null;
+      const errors = {};
+      const clienteId = clienteSelect.value;
+      const fondoId = fondoSelect.value;
+      const fecha = fechaInput.value;
+      const tipo = tipoSelect.value;
+      let especieId = especieSelect.value;
+      let especieNombre = null;
 
-      if(especieId==='__new__'){
-        const n=(newEspecieInput.value||'').trim();
-        if(!n) errors.especieSelect='Ingresá el nombre de la nueva especie.';
-        else especieNombre=n;
-      } else if(!especieId) {
-        errors.especieSelect='Seleccioná una especie.';
+      if (especieId === '__new__') {
+        const n = (newEspecieInput.value || '').trim();
+        if (!n) errors.especieSelect = 'Ingresá el nombre de la nueva especie.';
+        else especieNombre = n;
+      } else if (!especieId) {
+        errors.especieSelect = 'Seleccioná una especie.';
       }
 
-      const nominalVal=nominalInput.value;
+      const nominalVal = nominalInput.value;
       const nominalNum = Number(nominalVal);
-      if(!clienteId) errors.clienteSelect='Seleccioná un cliente.';
-      if(!fondoId) errors.fondoSelect='Seleccioná una cartera (obligatorio).';
-      if(!fecha) errors.fechaInput='Seleccioná fecha y hora.';
-      if(!tipo) errors.tipoSelect='Seleccioná tipo.';
-      if(!nominalVal || isNaN(nominalNum) || nominalNum<=0 || !Number.isInteger(nominalNum)) errors.nominalInput='Ingresá un nominal entero (>0).';
+      if (!clienteId) errors.clienteSelect = 'Seleccioná un cliente.';
+      if (!fondoId) errors.fondoSelect = 'Seleccioná una cartera (obligatorio).';
+      if (!fecha) errors.fechaInput = 'Seleccioná fecha y hora.';
+      if (!tipo) errors.tipoSelect = 'Seleccioná tipo.';
+      if (!nominalVal || isNaN(nominalNum) || nominalNum <= 0 || !Number.isInteger(nominalNum)) errors.nominalInput = 'Ingresá un nominal entero (>0).';
 
-      if (String(tipo).toLowerCase()==='egreso' && clienteId && fondoId && !errors.especieSelect) {
-        const available = getAvailableFor(clienteId, fondoId, especieId==='__new__'? null : especieId, especieNombre);
+      if (String(tipo).toLowerCase() === 'egreso' && clienteId && fondoId && !errors.especieSelect) {
+        const available = getAvailableFor(clienteId, fondoId, especieId === '__new__' ? null : especieId, especieNombre);
         if (available <= 0) {
           errors.nominalInput = 'No hay disponibilidad para vender.';
         } else if (nominalNum > available) {
@@ -375,41 +387,41 @@ export default function CSVMovimientos() {
       if (errors.fondoSelect) showFieldError(fondoSelect, errors.fondoSelect);
       if (errors.fechaInput) showFieldError(fechaInput, errors.fechaInput);
       if (errors.tipoSelect) showFieldError(tipoSelect, errors.tipoSelect);
-      if (errors.especieSelect){
-        if (especieSelect.value==='__new__') showFieldError(newEspecieInput, errors.especieSelect);
+      if (errors.especieSelect) {
+        if (especieSelect.value === '__new__') showFieldError(newEspecieInput, errors.especieSelect);
         else showFieldError(especieSelect, errors.especieSelect);
       }
       if (errors.nominalInput) showFieldError(nominalInput, errors.nominalInput);
 
       return {
-        valid:Object.keys(errors).length===0,
-        cleaned:{
+        valid: Object.keys(errors).length === 0,
+        cleaned: {
           clienteId, fondoId, fecha, tipo,
-          especieId: especieId==='__new__' ? null : especieId,
+          especieId: especieId === '__new__' ? null : especieId,
           especieNombre,
           nominal: parseInt(nominalNum, 10),
-          tc: (tcInput.value==='' ? null : Number(tcInput.value)),
+          tc: (tcInput.value === '' ? null : Number(tcInput.value)),
         }
       };
     }
 
-    function populateSpeciesSelect(selectedId){
-      especieSelect.innerHTML='';
+    function populateSpeciesSelect(selectedId) {
+      especieSelect.innerHTML = '';
       species.forEach(sp => especieSelect.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(sp.id)}">${escapeHtml(sp.name)}</option>`));
       especieSelect.insertAdjacentHTML('beforeend', '<option value="__new__">Agregar nueva...</option>');
-      if(selectedId){
-        const found = species.some(sp => sp.id===String(selectedId));
-        if(found){ especieSelect.value=String(selectedId); newEspecieInput.classList.add('d-none'); }
-        else { especieSelect.value='__new__'; newEspecieInput.classList.remove('d-none'); newEspecieInput.value=''; }
+      if (selectedId) {
+        const found = species.some(sp => sp.id === String(selectedId));
+        if (found) { especieSelect.value = String(selectedId); newEspecieInput.classList.add('d-none'); }
+        else { especieSelect.value = '__new__'; newEspecieInput.classList.remove('d-none'); newEspecieInput.value = ''; }
       } else {
-        if (species.length) { especieSelect.selectedIndex=0; newEspecieInput.classList.add('d-none'); newEspecieInput.value=''; }
-        else { especieSelect.value='__new__'; newEspecieInput.classList.remove('d-none'); }
+        if (species.length) { especieSelect.selectedIndex = 0; newEspecieInput.classList.add('d-none'); newEspecieInput.value = ''; }
+        else { especieSelect.value = '__new__'; newEspecieInput.classList.remove('d-none'); }
       }
       updateAvailableUI();
     }
 
-    function populateFormSelects(selectedSpeciesId){
-      clienteSelect.innerHTML='';
+    function populateFormSelects(selectedSpeciesId) {
+      clienteSelect.innerHTML = '';
       clients.forEach(c => clienteSelect.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`));
       const noFunds = fondos.length === 0;
       fondoSelect.innerHTML = noFunds
@@ -419,7 +431,7 @@ export default function CSVMovimientos() {
       fondoSelect.disabled = noFunds;
       populateSpeciesSelect(selectedSpeciesId);
     }
-    
+
     function refreshFondoSelect() {
       const noFunds = fondos.length === 0;
       fondoSelect.innerHTML = noFunds
@@ -430,10 +442,10 @@ export default function CSVMovimientos() {
     }
 
     especieSelect.addEventListener('change', () => {
-      if(especieSelect.value==='__new__'){
+      if (especieSelect.value === '__new__') {
         newEspecieInput.classList.remove('d-none'); newEspecieInput.focus();
       } else {
-        newEspecieInput.classList.add('d-none'); newEspecieInput.value='';
+        newEspecieInput.classList.add('d-none'); newEspecieInput.value = '';
       }
       updateAvailableUI();
     });
@@ -448,61 +460,61 @@ export default function CSVMovimientos() {
       updateAvailableUI();
     });
 
-    function groupByClient(movs){
-      const map={};
+    function groupByClient(movs) {
+      const map = {};
       movs.forEach(m => {
-        const cid=String(m.clienteId);
-        const clientName=m.clienteName || (getClientById(cid)||{}).name || 'Cliente';
-        const fundName=m.fondoName || (m.fondoId ? (getFundById(m.fondoId)||{}).name: '') || 'Sin cartera';
-        if(!map[cid]) map[cid]={ clientName, carteras:{} };
-        if(!map[cid].carteras[fundName]) map[cid].carteras[fundName]={};
-        if(!map[cid].carteras[fundName][m.especieName]) map[cid].carteras[fundName][m.especieName]=0;
-        const signed = m.tipo==='Egreso' ? -Number(m.nominal||0) : Number(m.nominal||0);
-        map[cid].carteras[fundName][m.especieName]+= signed;
+        const cid = String(m.clienteId);
+        const clientName = m.clienteName || (getClientById(cid) || {}).name || 'Cliente';
+        const fundName = m.fondoName || (m.fondoId ? (getFundById(m.fondoId) || {}).name : '') || 'Sin cartera';
+        if (!map[cid]) map[cid] = { clientName, carteras: {} };
+        if (!map[cid].carteras[fundName]) map[cid].carteras[fundName] = {};
+        if (!map[cid].carteras[fundName][m.especieName]) map[cid].carteras[fundName][m.especieName] = 0;
+        const signed = m.tipo === 'Egreso' ? -Number(m.nominal || 0) : Number(m.nominal || 0);
+        map[cid].carteras[fundName][m.especieName] += signed;
       });
       return map;
     }
 
-    function renderClients(filterQ=''){
-      if(!clientsContainer) return;
-      clientsContainer.innerHTML='';
-      const q=(filterQ||'').trim().toLowerCase();
-      const grouped=groupByClient(movements);
+    function renderClients(filterQ = '') {
+      if (!clientsContainer) return;
+      clientsContainer.innerHTML = '';
+      const q = (filterQ || '').trim().toLowerCase();
+      const grouped = groupByClient(movements);
       clients.forEach(client => {
-        const clientId=String(client.id);
-        const aggregated=grouped[clientId];
-        let include=!q || client.name.toLowerCase().includes(q);
-        if(!include && aggregated){
-          for(const fund in aggregated.carteras){
-            if(fund.toLowerCase().includes(q)){ include=true; break;}
-            for(const sp in aggregated.carteras[fund]){
-              if(sp.toLowerCase().includes(q)){ include=true; break;}
+        const clientId = String(client.id);
+        const aggregated = grouped[clientId];
+        let include = !q || client.name.toLowerCase().includes(q);
+        if (!include && aggregated) {
+          for (const fund in aggregated.carteras) {
+            if (fund.toLowerCase().includes(q)) { include = true; break; }
+            for (const sp in aggregated.carteras[fund]) {
+              if (sp.toLowerCase().includes(q)) { include = true; break; }
             }
-            if(include) break;
+            if (include) break;
           }
         }
-        if(!include) return;
+        if (!include) return;
 
-        const card=document.createElement('article');
-        card.className='client-card';
-        card.dataset.clientId=clientId;
+        const card = document.createElement('article');
+        card.className = 'client-card';
+        card.dataset.clientId = clientId;
 
-        const header=document.createElement('div');
-        header.className='client-header';
-        header.innerHTML=`<div class="client-left"><div class="avatar">${client.name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase()}</div><div><div class="client-title">${escapeHtml(client.name)}</div><div class="client-meta">${escapeHtml(client.perfil||'')}</div></div></div><div class="header-actions"><button class="btn" data-action="add" title="Agregar movimiento"><i class="fas fa-plus"></i></button><button class="btn" data-action="toggle" title="Abrir/Cerrar"><i class="fas fa-chevron-down"></i></button></div>`;
+        const header = document.createElement('div');
+        header.className = 'client-header';
+        header.innerHTML = `<div class="client-left"><div class="avatar">${client.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}</div><div><div class="client-title">${escapeHtml(client.name)}</div><div class="client-meta">${escapeHtml(client.perfil || '')}</div></div></div><div class="header-actions"><button class="btn" data-action="add" title="Agregar movimiento"><i class="fas fa-plus"></i></button><button class="btn" data-action="toggle" title="Abrir/Cerrar"><i class="fas fa-chevron-down"></i></button></div>`;
         card.appendChild(header);
 
-        const body=document.createElement('div');
-        body.className='client-body';
-        if(aggregated){
-          for(const fundName of Object.keys(aggregated.carteras)){
-            const fundBlock=document.createElement('div');
-            fundBlock.className='fund-block';
-            fundBlock.innerHTML=`<h4>${escapeHtml(fundName)}</h4>`;
-            const ul=document.createElement('ul');
-            ul.className='fund-list';
-            for(const sp of Object.keys(aggregated.carteras[fundName])){
-              const nominal=aggregated.carteras[fundName][sp];
+        const body = document.createElement('div');
+        body.className = 'client-body';
+        if (aggregated) {
+          for (const fundName of Object.keys(aggregated.carteras)) {
+            const fundBlock = document.createElement('div');
+            fundBlock.className = 'fund-block';
+            fundBlock.innerHTML = `<h4>${escapeHtml(fundName)}</h4>`;
+            const ul = document.createElement('ul');
+            ul.className = 'fund-list';
+            for (const sp of Object.keys(aggregated.carteras[fundName])) {
+              const nominal = aggregated.carteras[fundName][sp];
               const li = document.createElement('li');
               li.innerHTML = `
                 <span class="especie-name">${escapeHtml(sp)}</span>
@@ -515,32 +527,49 @@ export default function CSVMovimientos() {
             body.appendChild(fundBlock);
           }
         } else {
-          body.innerHTML='<div class="hint">Este cliente no tiene movimientos registrados.</div>';
+          body.innerHTML = '<div class="hint">Este cliente no tiene movimientos registrados.</div>';
         }
-        body.style.display='none';
+        body.style.display = 'none';
         card.appendChild(body);
 
         clientsContainer.appendChild(card);
       });
     }
 
-    function renderLastMovements(){
-      if(!lastMovementsTbody) return;
-      lastMovementsTbody.innerHTML='';
-      const sorted=[...movements].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha)).slice(0, DEFAULT_LAST_N);
-      sorted.forEach(m => {
-        const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${formatLocalReadable(m.fecha)}</td><td>${escapeHtml(m.clienteName)}</td><td>${escapeHtml(m.fondoName||'')}</td><td>${escapeHtml(m.especieName)}</td><td>${escapeHtml(m.tipo)}</td><td>${fmtNumber(m.nominal)}</td><td><button class="btn" data-action="edit" data-id="${m.id}" title="Editar"><i class="fas fa-edit"></i></button><button class="btn" data-action="delete" data-id="${m.id}" title="Eliminar"><i class="fas fa-trash"></i></button></td>`;
+    function renderLastMovements(filterQ = '') {
+      if (!lastMovementsTbody) return;
+      lastMovementsTbody.innerHTML = '';
+      const q = norm(filterQ);
+      let list = [...movements];
+      if (q) {
+        list = list.filter(m => {
+          const fields = [m.clienteName, m.fondoName, m.especieName, m.tipo];
+          return fields.some(f => norm(f).includes(q));
+        });
+      }
+      list.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      const limited = q ? list.slice(0, 100) : list.slice(0, DEFAULT_LAST_N);
+
+      if (limited.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="7" style="text-align:center; color:#666;">Sin resultados</td>`;
+        lastMovementsTbody.appendChild(tr);
+        return;
+      }
+
+      limited.forEach(m => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${formatLocalReadable(m.fecha)}</td><td>${escapeHtml(m.clienteName)}</td><td>${escapeHtml(m.fondoName || '')}</td><td>${escapeHtml(m.especieName)}</td><td>${escapeHtml(m.tipo)}</td><td>${fmtNumber(m.nominal)}</td><td><button class="btn" data-action="edit" data-id="${m.id}" title="Editar"><i class="fas fa-edit"></i></button><button class="btn" data-action="delete" data-id="${m.id}" title="Eliminar"><i class="fas fa-trash"></i></button></td>`;
         lastMovementsTbody.appendChild(tr);
       });
     }
 
-    async function ensureFundsForClient(clientId){
+    async function ensureFundsForClient(clientId) {
       fondos = await fetchFundsForClient(clientId || '');
       fondos = fondos.map(f => ({ ...f, name: fundNamesById.get(f.id) || f.name }));
     }
 
-    async function openNewMovement(clientId){
+    async function openNewMovement(clientId) {
       if (!clients || clients.length === 0) {
         try { clients = await fetchClients(); } catch { clients = []; }
       }
@@ -548,60 +577,60 @@ export default function CSVMovimientos() {
       const selectedId = clientId ?? fallbackSelected;
 
       currentModalClientId = String(selectedId || '');
-      movementModalTitle.textContent='Agregar movimiento';
-      movementIdInput.value='';
+      movementModalTitle.textContent = 'Agregar movimiento';
+      movementIdInput.value = '';
 
       await ensureFundsForClient(currentModalClientId);
       populateFormSelects();
 
       if (currentModalClientId) { clienteSelect.value = currentModalClientId; }
-      fondoSelect.value='';
+      fondoSelect.value = '';
 
-      fechaInput.value=new Date().toISOString().slice(0,16);
-      tipoSelect.value='Ingreso';
+      fechaInput.value = new Date().toISOString().slice(0, 16);
+      tipoSelect.value = 'Ingreso';
 
       if (species.length === 0) {
-        especieSelect.value='__new__'; newEspecieInput.classList.remove('d-none');
+        especieSelect.value = '__new__'; newEspecieInput.classList.remove('d-none');
       } else {
-        especieSelect.value=species[0].id; newEspecieInput.classList.add('d-none'); newEspecieInput.value='';
+        especieSelect.value = species[0].id; newEspecieInput.classList.add('d-none'); newEspecieInput.value = '';
       }
 
-      nominalInput.value='';
-      tcInput.value='';
+      nominalInput.value = '';
+      tcInput.value = '';
       updateAvailableUI();
       showModal(movementModal);
     }
 
-    async function openEditMovement(id){
-      const m=movements.find(x=> String(x.id)===String(id));
-      if(!m) return;
+    async function openEditMovement(id) {
+      const m = movements.find(x => String(x.id) === String(id));
+      if (!m) return;
       currentModalClientId = String(m.clienteId || '');
-      movementModalTitle.textContent='Editar movimiento';
-      movementIdInput.value=m.id;
+      movementModalTitle.textContent = 'Editar movimiento';
+      movementIdInput.value = m.id;
 
       await ensureFundsForClient(currentModalClientId);
       populateFormSelects(m.especieId);
 
-      clienteSelect.value=m.clienteId;
-      fondoSelect.value=m.fondoId || '';
-      fechaInput.value=m.fecha.slice(0,16);
-      tipoSelect.value=m.tipo;
+      clienteSelect.value = m.clienteId;
+      fondoSelect.value = m.fondoId || '';
+      fechaInput.value = m.fecha.slice(0, 16);
+      tipoSelect.value = m.tipo;
 
-      if(m.especieId && species.some(sp => sp.id===m.especieId)){
-        especieSelect.value=m.especieId; newEspecieInput.classList.add('d-none'); newEspecieInput.value='';
+      if (m.especieId && species.some(sp => sp.id === m.especieId)) {
+        especieSelect.value = m.especieId; newEspecieInput.classList.add('d-none'); newEspecieInput.value = '';
       } else {
-        especieSelect.value='__new__'; newEspecieInput.classList.remove('d-none'); newEspecieInput.value=m.especieName || '';
+        especieSelect.value = '__new__'; newEspecieInput.classList.remove('d-none'); newEspecieInput.value = m.especieName || '';
       }
 
-      nominalInput.value=m.nominal;
-      tcInput.value=m.tc ?? '';
+      nominalInput.value = m.nominal;
+      tcInput.value = m.tc ?? '';
       updateAvailableUI();
       showModal(movementModal);
     }
 
     movementSaveBtn.addEventListener('click', async () => {
-      const {valid, cleaned} = validateMovementForm();
-      if(!valid) return;
+      const { valid, cleaned } = validateMovementForm();
+      if (!valid) return;
 
       try {
         const payload = {
@@ -615,7 +644,7 @@ export default function CSVMovimientos() {
           tc: cleaned.tc,
         };
 
-        if(movementIdInput.value){
+        if (movementIdInput.value) {
           await updateMovement(movementIdInput.value, payload);
         } else {
           await createMovement(payload);
@@ -631,8 +660,8 @@ export default function CSVMovimientos() {
         currentModalClientId = cleaned.clienteId || currentModalClientId || '';
         fondos = await fetchFundsForClient(currentModalClientId);
 
-        renderClients(searchInput.value||'');
-        renderLastMovements();
+        renderClients(searchInput?.value || '');
+        renderLastMovements(lastMovSearchInput?.value || '');
         // Reaplicar con precios ya cargados en memoria
         updateValuesFromMapping(pricesMap);
       } catch (e) {
@@ -642,8 +671,8 @@ export default function CSVMovimientos() {
     });
     movementCancelBtn.addEventListener('click', () => hideModal(movementModal));
 
-    searchInput?.addEventListener('input', () => { 
-      renderClients(searchInput.value||''); 
+    searchInput?.addEventListener('input', () => {
+      renderClients(searchInput.value || '');
       updateValuesFromMapping(pricesMap);
     });
     openAddBtn?.addEventListener('click', () => openNewMovement());
@@ -665,7 +694,7 @@ export default function CSVMovimientos() {
         openNewMovement(clientId);
       }
     });
-    
+
     lastMovementsTbody?.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
@@ -682,7 +711,7 @@ export default function CSVMovimientos() {
           await deleteMovement(id);
           movements = await fetchMovements();
           renderClients(searchInput?.value || '');
-          renderLastMovements();
+          renderLastMovements(lastMovSearchInput?.value || '');
           updateValuesFromMapping(pricesMap);
         } catch (err) {
           if (err && err !== false) {
@@ -691,23 +720,54 @@ export default function CSVMovimientos() {
           }
         }
       }
-    });    
-    
-    // ===== CSV =====
-    function normalizeName(s){ if(!s) return ''; return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s\.,_\-"'()\/\\]+/g,'').replace(/[^a-z0-9]/g,'').trim(); }
-    function parseNumber(s){ if(s===null||s===undefined) return NaN; let t=String(s).trim(); if(t==='') return NaN; t=t.replace(/\u00A0/g,' ').replace(/\$/g,'').replace(/\s/g,''); const hasDot=t.indexOf('.')!==-1; const hasComma=t.indexOf(',')!==-1; if(hasDot && hasComma){ if(t.indexOf('.') < t.indexOf(',')) t=t.replace(/\./g,'').replace(',', '.'); else t=t.replace(/,/g,''); } else if(hasComma && !hasDot){ t=t.replace(',', '.'); } t=t.replace(/[^0-9\.\-]/g,''); const v=parseFloat(t); return isFinite(v)? v: NaN; }
-    function detectDelimiter(text){ const lines=text.split(/\r?\n/).filter(l=>l.trim().length>0).slice(0,8); let comma=0, semi=0, tab=0; lines.forEach(l=> { comma += (l.match(/,/g)||[]).length; semi += (l.match(/;/g)||[]).length; tab += (l.match(/\t/g)||[]).length; }); if(semi>comma && semi>=tab) return ';'; if(tab>comma && tab>=semi) return '\t'; return ','; }
-    function splitCsvLine(line, delim){ const res=[]; let cur=''; let inQ=false; for(let i=0;i<line.length;i++){ const ch=line[i]; if(ch==='"'){ if(inQ && i+1<line.length && line[i+1]==='"'){ cur+='"'; i++; } else { inQ=!inQ; } } else if(ch===delim && !inQ){ res.push(cur); cur=''; } else { cur+=ch; } } res.push(cur); return res.map(c=>c.trim()); }
+    });
 
-    function parseLocaleInteger(s){
+    // ===== CSV =====
+    function normalizeName(s) { if (!s) return ''; return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\.,_\-"'()\/\\]+/g, '').replace(/[^a-z0-9]/g, '').trim(); }
+    function parseNumber(s) {
+      if (s === null || s === undefined) return NaN;
+      let t = String(s).trim();
+      if (t === '') return NaN;
+      t = t.replace(/\u00A0/g, ' ').replace(/\$/g, '').replace(/\s/g, '');
+      const hasDot = t.indexOf('.') !== -1; const hasComma = t.indexOf(',') !== -1;
+      if (hasDot && hasComma) {
+        if (t.indexOf('.') < t.indexOf(',')) t = t.replace(/\./g, '').replace(',', '.');
+        else t = t.replace(/,/g, '');
+      } else if (hasComma && !hasDot) {
+        t = t.replace(',', '.');
+      }
+      t = t.replace(/[^0-9\.\-]/g, '');
+      const v = parseFloat(t);
+      return isFinite(v) ? v : NaN;
+    }
+    function detectDelimiter(text) {
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0).slice(0, 8);
+      let comma = 0, semi = 0, tab = 0;
+      lines.forEach(l => { comma += (l.match(/,/g) || []).length; semi += (l.match(/;/g) || []).length; tab += (l.match(/\t/g) || []).length; });
+      if (semi > comma && semi >= tab) return ';'; if (tab > comma && tab >= semi) return '\t'; return ',';
+    }
+    function splitCsvLine(line, delim) {
+      const res = []; let cur = ''; let inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { if (inQ && i + 1 < line.length && line[i + 1] === '"') { cur += '"'; i++; } else { inQ = !inQ; } }
+        else if (ch === delim && !inQ) { res.push(cur); cur = ''; }
+        else { cur += ch; }
+      }
+      res.push(cur);
+      return res.map(c => c.trim());
+    }
+
+    // Cantidades enteras con miles “1.234.567” o “1,234,567”
+    const parseLocaleInteger = (s) => {
       if (s == null) return 0;
       const str = String(s);
-      const sign = str.trim().startsWith('-') ? -1 : 1;
-      const digits = str.replace(/[^\d]/g, ''); // quita , . espacios, NBSP, etc.
+      const sign = /^\s*-/.test(str) ? -1 : 1;
+      const digits = str.replace(/[^\d]/g, '');
       if (!digits) return 0;
       const n = parseInt(digits, 10);
       return Number.isFinite(n) ? sign * n : 0;
-    }
+    };
 
     function extractDateFromFilename(name) {
       if (!name) return new Date().toISOString().slice(0, 10);
@@ -719,76 +779,76 @@ export default function CSVMovimientos() {
     }
 
     // Cabeceras: Instrumento, Monto total, Cantidad[, Moneda]
-    function parseTenenciasCSV(text){
-      const delim=detectDelimiter(text);
-      const rawLines=text.split(/\r?\n/).filter(l=>l.trim().length>0);
-      if(rawLines.length===0) return [];
-      const header=splitCsvLine(rawLines[0],delim).map(h=>h.trim().toLowerCase());
+    function parseTenenciasCSV(text) {
+      const delim = detectDelimiter(text);
+      const rawLines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (rawLines.length === 0) return [];
+      const header = splitCsvLine(rawLines[0], delim).map(h => h.trim().toLowerCase());
 
       const colInst = header.findIndex(h => h.includes('instrumento'));
       const colMonto = header.findIndex(h => h.includes('monto'));
       const colCant = header.findIndex(h => h.includes('cant'));
       const colMoneda = header.findIndex(h => h.includes('moneda')); // opcional
 
-      if(colInst===-1 || colMonto===-1 || colCant===-1){
+      if (colInst === -1 || colMonto === -1 || colCant === -1) {
         throw new Error('Cabecera CSV inválida. Se espera: Instrumento, Monto total, Cantidad[, Moneda]');
       }
 
-      const rows=[];
-      for(let i=1;i<rawLines.length;i++){
-        const cols=splitCsvLine(rawLines[i],delim);
-        if(cols.length<=Math.max(colInst,colMonto,colCant)) continue;
-        const instrumento=(cols[colInst]||'').trim();
-        const monto=parseNumber(cols[colMonto]);
-        const cantidad=parseNumber(cols[colCant]);
-        const moneda = colMoneda===-1 ? '' : (cols[colMoneda]||'').trim().toUpperCase();
-        if(!instrumento) continue;
-        if(!isFinite(monto) || !isFinite(cantidad)) continue;
+      const rows = [];
+      for (let i = 1; i < rawLines.length; i++) {
+        const cols = splitCsvLine(rawLines[i], delim);
+        if (cols.length <= Math.max(colInst, colMonto, colCant)) continue;
+        const instrumento = (cols[colInst] || '').trim();
+        const monto = parseNumber(cols[colMonto]);
+        const cantidad = parseNumber(cols[colCant]);
+        const moneda = colMoneda === -1 ? '' : (cols[colMoneda] || '').trim().toUpperCase();
+        if (!instrumento) continue;
+        if (!isFinite(monto) || !isFinite(cantidad)) continue;
         rows.push({ instrumento, monto, cantidad, moneda });
       }
       return rows;
     }
 
-    function aggregatePrices(rows){
+    function aggregatePrices(rows) {
       const byKey = new Map(); // key: instrumento
-      const isCash = (inst) => ['ARS','USD','USDC','USD.C'].includes(String(inst).toUpperCase());
-      for(const r of rows){
-        const inst = String(r.instrumento||'').trim();
-        if(!inst || isCash(inst)) continue;
-        const qty = Number(r.cantidad)||0;
-        const amt = Number(r.monto)||0;
-        if(qty <= 0 || !isFinite(qty) || !isFinite(amt)) continue;
+      const isCash = (inst) => ['ARS', 'USD', 'USDC', 'USD.C'].includes(String(inst).toUpperCase());
+      for (const r of rows) {
+        const inst = String(r.instrumento || '').trim();
+        if (!inst || isCash(inst)) continue;
+        const qty = Number(r.cantidad) || 0;
+        const amt = Number(r.monto) || 0;
+        if (qty <= 0 || !isFinite(qty) || !isFinite(amt)) continue;
         const key = inst;
-        const prev = byKey.get(key) || { totalMonto:0, totalCantidad:0 };
+        const prev = byKey.get(key) || { totalMonto: 0, totalCantidad: 0 };
         prev.totalMonto += amt;
         prev.totalCantidad += qty;
         byKey.set(key, prev);
       }
-      const items=[];
-      for(const [instrumento,val] of byKey){
-        if(val.totalCantidad<=0) continue;
-        items.push({ instrumento, precio: val.totalMonto/val.totalCantidad });
+      const items = [];
+      for (const [instrumento, val] of byKey) {
+        if (val.totalCantidad <= 0) continue;
+        items.push({ instrumento, precio: val.totalMonto / val.totalCantidad });
       }
-      return items.sort((a,b)=> a.instrumento.localeCompare(b.instrumento,'es'));
+      return items.sort((a, b) => a.instrumento.localeCompare(b.instrumento, 'es'));
     }
 
     // Sanitiza items antes de enviar (precio > 0 y finito)
-    function sanitizeItems(items){
+    function sanitizeItems(items) {
       const cleaned = [];
       let dropped = 0;
-      for(const it of items){
-        const nombre = (it.instrumento||'').trim();
+      for (const it of items) {
+        const nombre = (it.instrumento || '').trim();
         const precio = Number(it.precio);
-        if(!nombre || !Number.isFinite(precio) || precio <= 0){ dropped++; continue; }
+        if (!nombre || !Number.isFinite(precio) || precio <= 0) { dropped++; continue; }
         cleaned.push({ instrumento: nombre, precio });
       }
       return { cleaned, dropped };
     }
 
     // ===== Valorización desde DB =====
-    const normalizeSimple = (s) => (s||'').toString().trim().toLowerCase().replace(/\s+/g,'').replace(/[^\w]/g,'');
+    const normalizeSimple = (s) => (s || '').toString().trim().toLowerCase().replace(/\s+/g, '').replace(/[^\w]/g, '');
 
-    async function fetchServerPricesMapping(){
+    async function fetchServerPricesMapping() {
       try {
         const j = await apiJSON('/api/movimiento?action=latestPrecios');
         const arr = Array.isArray(j?.data) ? j.data : [];
@@ -808,7 +868,7 @@ export default function CSVMovimientos() {
       }
     }
 
-    async function loadPricesFromDB(){
+    async function loadPricesFromDB() {
       try {
         if (csvStatusText) csvStatusText.textContent = 'Cargando precios desde la base...';
         pricesMap = await fetchServerPricesMapping();
@@ -820,8 +880,8 @@ export default function CSVMovimientos() {
       }
     }
 
-    function updateValuesFromMapping(mapping){
-      if(!clientsContainer) return;
+    function updateValuesFromMapping(mapping) {
+      if (!clientsContainer) return;
       const clientCards = clientsContainer.querySelectorAll('.client-card');
       let globalTotal = 0;
 
@@ -843,10 +903,10 @@ export default function CSVMovimientos() {
         rows.forEach(row => {
           const isTr = row.tagName === 'TR';
           const nameEl = row.querySelector('.especie-name') || row.querySelector('span');
-          const qtyEl  = row.querySelector('.especie-qty')  || row.querySelector('strong');
-          let valueEl  = row.querySelector('.especie-value');
+          const qtyEl = row.querySelector('.especie-qty') || row.querySelector('strong');
+          let valueEl = row.querySelector('.especie-value');
 
-          if(!nameEl || !qtyEl) return;
+          if (!nameEl || !qtyEl) return;
 
           const displayName = (nameEl.textContent || '').trim();
           const nominal = parseLocaleInteger(qtyEl.textContent || '0');
@@ -892,15 +952,15 @@ export default function CSVMovimientos() {
 
     // Reaplicar valores si cambia el DOM del contenedor (sin golpear la API)
     const mo = new MutationObserver(() => { updateValuesFromMapping(pricesMap); });
-    if(clientsContainer) mo.observe(clientsContainer,{childList:true,subtree:true});
+    if (clientsContainer) mo.observe(clientsContainer, { childList: true, subtree: true });
 
     window.__movementsApp = {
-      async reload(){
+      async reload() {
         movements = await fetchMovements();
         allFunds = await fetchAllFunds();
         fondos = allFunds.slice();
-        renderClients(searchInput?.value||''); 
-        renderLastMovements(); 
+        renderClients(searchInput?.value || '');
+        renderLastMovements(lastMovSearchInput?.value || '');
         updateValuesFromMapping(pricesMap);
       }
     };
@@ -913,25 +973,25 @@ export default function CSVMovimientos() {
       allFunds = allFunds.map(f => ({ ...f, name: fundNamesById.get(f.id) || f.name }));
       fondos = allFunds.slice();
 
-      clienteSelect && (clienteSelect.innerHTML='');
+      clienteSelect && (clienteSelect.innerHTML = '');
       clients.forEach(c => clienteSelect?.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`));
       const spSelected = species[0]?.id;
       populateFormSelects(spSelected);
       renderClients();
-      renderLastMovements();
+      renderLastMovements(lastMovSearchInput?.value || '');
       updateAvailableUI();
 
       await loadPricesFromDB();
     })();
 
-    if(csvUploadBtn && csvFileInput){
-      csvUploadBtn.addEventListener('click', ()=> csvFileInput.click());
+    if (csvUploadBtn && csvFileInput) {
+      csvUploadBtn.addEventListener('click', () => csvFileInput.click());
       // Clear no se usa más para precios
       if (clearCsvBtn) clearCsvBtn.style.display = 'none';
 
-      csvFileInput.addEventListener('change', async (e)=> {
-        const f=e.target.files&&e.target.files[0];
-        if(!f) return;
+      csvFileInput.addEventListener('change', async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
         try {
           if (csvStatusText) csvStatusText.textContent = 'Procesando CSV...';
           const text = await f.text();
@@ -939,7 +999,7 @@ export default function CSVMovimientos() {
           const items = aggregatePrices(rawRows); // [{instrumento, precio}]
           const { cleaned, dropped } = sanitizeItems(items);
 
-          if(cleaned.length===0){
+          if (cleaned.length === 0) {
             alert('No se detectaron precios válidos en el CSV (precios deben ser > 0).');
             if (csvStatusText) csvStatusText.textContent = 'Sin precios válidos';
             return;
@@ -957,20 +1017,25 @@ export default function CSVMovimientos() {
           });
 
           if (csvStatusText) {
-            const msg = `Precios guardados en DB (${cleaned.length}${dropped?`, descartados: ${dropped}`:''}) — ${fecha}`;
+            const msg = `Precios guardados en DB (${cleaned.length}${dropped ? `, descartados: ${dropped}` : ''}) — ${fecha}`;
             csvStatusText.textContent = msg;
           }
           await loadPricesFromDB(); // vuelve a leer de DB y aplica
           alert('Precios guardados y aplicados desde la base.');
-        } catch(err){
+        } catch (err) {
           console.error(err);
-          alert('Error procesando/guardando el CSV: '+(err?.message||err));
+          alert('Error procesando/guardando el CSV: ' + (err?.message || err));
           if (csvStatusText) csvStatusText.textContent = 'Error al guardar precios';
         } finally {
-          csvFileInput.value='';
+          csvFileInput.value = '';
         }
       });
     }
+
+    // Búsqueda en “Últimos movimientos”
+    lastMovSearchInput?.addEventListener('input', () => {
+      renderLastMovements(lastMovSearchInput.value);
+    });
 
     return () => { mo.disconnect(); };
   }, []);
@@ -997,16 +1062,19 @@ export default function CSVMovimientos() {
         <section id="clientsContainer" className="clients-container" aria-live="polite"></section>
         <section className="last-movements-section">
           <h2>Últimos movimientos</h2>
-            <div className="table-wrap">
-              <table id="lastMovementsTable" className="table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th><th>Cliente</th><th>Cartera</th><th>Especie</th><th>Tipo</th><th>Nominal</th><th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="lastMovementsTbody"></tbody>
-              </table>
-            </div>
+          <div className="last-movements-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', margin: '8px 0 12px' }}>
+            <input id="lastMovSearchInput" className="search-input" placeholder="Buscar por cliente, cartera, especie o tipo..." />
+          </div>
+          <div className="table-wrap">
+            <table id="lastMovementsTable" className="table">
+              <thead>
+                <tr>
+                  <th>Fecha</th><th>Cliente</th><th>Cartera</th><th>Especie</th><th>Tipo</th><th>Nominal</th><th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="lastMovementsTbody"></tbody>
+            </table>
+          </div>
         </section>
       </main>
 
@@ -1117,7 +1185,7 @@ export default function CSVMovimientos() {
           font-variant-numeric: tabular-nums;
         }
 
-        /* Evitar que el total del header se achique o se recorte */
+        /* Evitar que el total del header se recorte */
         .client-header .client-total {
           white-space: nowrap;
           flex: 0 0 auto;
