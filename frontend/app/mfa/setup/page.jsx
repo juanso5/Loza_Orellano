@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../../lib/supabaseClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function MfaSetupPage() {
+function MfaSetupInner() {
   const router = useRouter();
   const search = useSearchParams();
   const returnUrl = search?.get('returnUrl') || '/home';
@@ -15,6 +15,7 @@ export default function MfaSetupPage() {
   const [enrollError, setEnrollError] = useState('');
   const [verifyError, setVerifyError] = useState('');
   const [totpUri, setTotpUri] = useState('');
+  const [qrSrc, setQrSrc] = useState('');
   const [factorId, setFactorId] = useState('');
   const [code, setCode] = useState('');
 
@@ -29,14 +30,12 @@ export default function MfaSetupPage() {
         return;
       }
 
-      // Gateo: si el email no está verificado, ir a verify-email
       const emailConfirmed = user.email_confirmed_at || user.confirmed_at;
       if (!emailConfirmed) {
         router.replace(`/verify-email?returnUrl=${encodeURIComponent(returnUrl)}`);
         return;
       }
 
-      // Si ya tiene TOTP verificado, ir a verificar (elevar AAL)
       const { data: factorsData, error: lfErr } = await supabase.auth.mfa.listFactors();
       if (lfErr) {
         setEnrollError(lfErr.message);
@@ -49,7 +48,6 @@ export default function MfaSetupPage() {
         return;
       }
 
-      // Limpia residuos unverified extra
       const unverified = (factorsData?.totp || []).filter((f) => f.status === 'unverified');
       if (unverified.length > 1) {
         await Promise.all(
@@ -57,7 +55,6 @@ export default function MfaSetupPage() {
         );
       }
 
-      // Reusar unverified o crear uno nuevo
       let enrollFactor = null;
       {
         const { data: f2 } = await supabase.auth.mfa.listFactors();
@@ -83,20 +80,34 @@ export default function MfaSetupPage() {
     run();
   }, [router, returnUrl]);
 
+  // Generar QR local (dinámico; no import estático)
+  useEffect(() => {
+    if (!totpUri) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const { toDataURL } = await import('qrcode');
+        const url = await toDataURL(totpUri, { errorCorrectionLevel: 'M', margin: 1, width: 180 });
+        if (mounted) setQrSrc(url);
+      } catch {
+        if (mounted) setQrSrc('');
+      }
+    })();
+    return () => { mounted = false; };
+  }, [totpUri]);
+
   const handleVerify = async (e) => {
     e.preventDefault();
     setVerifyError('');
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
 
-    // Reconfirma factor actual
     const { data: factors } = await supabase.auth.mfa.listFactors();
     const current = (factors?.totp || []).find((f) => f.status === 'unverified') || null;
     const useFactorId = current?.id || factorId;
 
     const digits = code.replace(/\D/g, '');
 
-    // Verificación de enrolamiento + fallback con challengeId
     let { error } = await supabase.auth.mfa.verify({ factorId: useFactorId, code: digits });
     if (error) {
       const { data: chal } = await supabase.auth.mfa.challenge({ factorId: useFactorId });
@@ -136,13 +147,11 @@ export default function MfaSetupPage() {
       {!!totpUri && (
         <>
           <p>Escaneá este QR con tu app autenticadora y luego ingresá el primer código:</p>
-          <img
-            alt="TOTP QR"
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(totpUri)}`}
-            width={180}
-            height={180}
-          />
-          <p style={{ fontSize: 12, color: '#666' }}>Si no podés escanear, agregá manualmente esta URI: {totpUri}</p>
+          {qrSrc ? (
+            <img alt="TOTP QR" src={qrSrc} width={180} height={180} />
+          ) : (
+            <p style={{ fontSize: 12, color: '#666' }}>Generando QR...</p>
+          )}
           <form onSubmit={handleVerify} style={{ marginTop: 12 }}>
             <input
               inputMode="numeric"
@@ -164,5 +173,13 @@ export default function MfaSetupPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Cargando...</div>}>
+      <MfaSetupInner />
+    </Suspense>
   );
 }

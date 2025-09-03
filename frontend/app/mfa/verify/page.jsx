@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../../lib/supabaseClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function MfaVerifyPage() {
+function MfaVerifyInner() {
   const router = useRouter();
   const search = useSearchParams();
   const returnUrl = search?.get('returnUrl') || '/home';
@@ -28,21 +28,18 @@ export default function MfaVerifyPage() {
         return;
       }
 
-      // Gateo por email verificado
       const emailConfirmed = user.email_confirmed_at || user.confirmed_at;
       if (!emailConfirmed) {
         router.replace(`/verify-email?returnUrl=${encodeURIComponent(returnUrl)}`);
         return;
       }
 
-      // Si ya está en AAL2, seguir
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal?.currentLevel === 'aal2') {
         router.replace(returnUrl);
         return;
       }
 
-      // Buscar TOTP verificado
       const { data: factors, error: lfErr } = await supabase.auth.mfa.listFactors();
       if (lfErr) {
         setErrorMsg(lfErr.message);
@@ -55,7 +52,6 @@ export default function MfaVerifyPage() {
         return;
       }
 
-      // Lanzar desafío
       const { data: chal, error } = await supabase.auth.mfa.challenge({ factorId: totp.id });
       if (error) {
         setErrorMsg(error.message || 'No se pudo iniciar el desafío MFA');
@@ -117,9 +113,21 @@ export default function MfaVerifyPage() {
           Verificar y continuar
         </button>
       </form>
-      <button type="button" onClick={handleCancel} style={{ marginTop: 12, width: '100%', padding: 10, background: '#eee' }}>
+      <button
+        type="button"
+        onClick={handleCancel}
+        style={{ marginTop: 12, width: '100%', padding: 10, background: '#eee' }}
+      >
         Cancelar y cambiar usuario
       </button>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Cargando...</div>}>
+      <MfaVerifyInner />
+    </Suspense>
   );
 }

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../lib/supabaseClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function VerifyEmailPage() {
+function VerifyEmailInner() {
   const router = useRouter();
   const search = useSearchParams();
   const returnUrl = search?.get('returnUrl') || '/home';
@@ -23,7 +23,6 @@ export default function VerifyEmailPage() {
       router.replace('/login?reason=need-auth');
       return;
     }
-    // Reenvía correo de verificación al email del usuario
     const redirectTo = `${window.location.origin}/login?verified=1`;
     const { error } = await supabase.auth.resend({
       type: 'signup',
@@ -58,16 +57,18 @@ export default function VerifyEmailPage() {
       {msg && <p style={{ color: 'green' }}>{msg}</p>}
       {err && <p style={{ color: 'crimson' }}>{err}</p>}
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button onClick={resend} disabled={loading} style={{ padding: 10 }}>
-          Reenviar verificación
-        </button>
-        <button onClick={check} style={{ padding: 10 }}>
-          Ya verifiqué
-        </button>
-        <button onClick={logout} style={{ padding: 10, background: '#eee' }}>
-          Cambiar usuario
-        </button>
+        <button onClick={resend} disabled={loading} style={{ padding: 10 }}>Reenviar verificación</button>
+        <button onClick={check} style={{ padding: 10 }}>Ya verifiqué</button>
+        <button onClick={logout} style={{ padding: 10, background: '#eee' }}>Cambiar usuario</button>
       </div>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Cargando...</div>}>
+      <VerifyEmailInner />
+    </Suspense>
   );
 }
