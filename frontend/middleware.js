@@ -1,58 +1,60 @@
-// middleware.js
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(req) {
-  const { nextUrl, cookies: reqCookies } = req;
-  const url = nextUrl.clone();
+  const { pathname, search } = req.nextUrl;
 
-  const res = NextResponse.next({ request: { headers: req.headers } });
+  const isPublic =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/verify-email') ||     // <-- agregado
+    pathname.startsWith('/mfa/') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/assets');
 
-  // Fast path: check for Supabase auth cookie
-  const cookiesList = typeof reqCookies.getAll === 'function' ? reqCookies.getAll() : [];
-  const hasSbAuth = cookiesList.some((cookie) => /^sb-.*-auth-token$/.test(cookie.name));
-  if (!hasSbAuth) {
-    url.pathname = '/login';
-    url.searchParams.set('redirectedFrom', nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
+  if (isPublic) return NextResponse.next();
 
-  const supaUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supaKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const PROTECTED_PREFIXES = [
+    '/home',
+    '/dashboard',
+    '/cliente',
+    '/clientes',
+    '/fondo',
+    '/fondos',
+    '/movimiento',
+    '/movimientos',
+  ];
+  const requiresAuth = PROTECTED_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + '/')
+  );
+  if (!requiresAuth) return NextResponse.next();
 
-  if (!supaUrl || !supaKey) {
-    url.pathname = '/login';
-    url.searchParams.set('redirectedFrom', nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
+  const res = NextResponse.next();
 
-  const supabase = createServerClient(supaUrl, supaKey, {
-    cookies: {
-      get(name) { return reqCookies.get(name)?.value; },
-      set(name, value, options) { res.cookies.set({ name, value, ...options }); },
-      remove(name, options) { res.cookies.set({ name, value: '', ...options }); },
-    },
-  });
-
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Allowlist desde env (evita hardcode). Ej: ALLOWED_USER_IDS="uuid1,uuid2"
-    const allowed = (process.env.ALLOWED_USER_IDS || process.env.NEXT_PUBLIC_ALLOWED_USER_IDS || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-
-    if (!user || (allowed.length > 0 && !allowed.includes(user.id))) {
-      url.pathname = '/login';
-      url.searchParams.set('redirectedFrom', nextUrl.pathname);
-      return NextResponse.redirect(url);
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get: (name) => req.cookies.get(name)?.value,
+        set: (name, value, options) => res.cookies.set({ name, value, ...options }),
+        remove: (name, options) => res.cookies.set({ name, value: '', ...options, maxAge: 0 }),
+      },
     }
-  } catch (err) {
-    console.error('Middleware auth error:', err);
-    url.pathname = '/login';
-    url.searchParams.set('redirectedFrom', nextUrl.pathname);
-    return NextResponse.redirect(url);
+  );
+
+  await supabase.auth.getSession();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    const dst = new URL(`/login?returnUrl=${encodeURIComponent(pathname + (search || ''))}`, req.url);
+    return NextResponse.redirect(dst, { headers: res.headers });
+  }
+
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal?.currentLevel !== 'aal2') {
+    const dst = new URL(`/mfa/verify?returnUrl=${encodeURIComponent(pathname + (search || ''))}`, req.url);
+    return NextResponse.redirect(dst, { headers: res.headers });
   }
 
   return res;
@@ -60,11 +62,13 @@ export async function middleware(req) {
 
 export const config = {
   matcher: [
-    '/',
     '/home/:path*',
-    '/fondos/:path*',
-    '/cliente/:path*',
-    '/movimientos/:path*',
     '/dashboard/:path*',
+    '/cliente/:path*',
+    '/clientes/:path*',
+    '/fondo/:path*',
+    '/fondos/:path*',
+    '/movimiento/:path*',
+    '/movimientos/:path*',
   ],
 };

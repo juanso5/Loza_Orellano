@@ -1,78 +1,63 @@
-
 'use client';
-
-import { useState, useEffect } from 'react';
+// ...existing code...
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../lib/supabaseClient';
+
 
 export default function LoginClient({ redirectedFrom = '/home' }) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
+  // Si ya hay sesión, ir directo al destino; el middleware decidirá si pide MFA
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        const dest = (!redirectedFrom || redirectedFrom === '/' || redirectedFrom === '/login') ? '/home' : redirectedFrom;
-        if (typeof window !== 'undefined') window.location.replace(dest);
-        else router.replace(dest);
-      }
-    });
+    const check = async () => {
+      const sb = getSupabaseBrowserClient();
+      if (!sb) return;
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) router.replace(redirectedFrom);
+    };
+    check();
   }, [router, redirectedFrom]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setErr('');
     setLoading(true);
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setLoading(false);
-      setError('Faltan variables de entorno de Supabase. Configurá NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-      return;
-    }
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
+    const sb = getSupabaseBrowserClient();
+    if (!sb) return;
+
+    const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
-      setError(error.message || 'No se pudo iniciar sesión');
+      setErr(error.message || 'No se pudo iniciar sesión');
+      setLoading(false);
       return;
     }
-  const dest = (!redirectedFrom || redirectedFrom === '/' || redirectedFrom === '/login') ? '/home' : redirectedFrom;
-  if (typeof window !== 'undefined') window.location.assign(dest);
-  else router.replace(dest);
+    // Dejar que el middleware haga el enforcement de AAL2
+    router.replace(redirectedFrom);
+    setLoading(false);
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6' }}>
-      <div style={{ width: '100%', maxWidth: 420, background: '#fff', padding: 24, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.06)' }}>
-        <h1 style={{ margin: '0 0 8px 0', fontSize: 24 }}>Ingresar</h1>
-        <p style={{ margin: '0 0 20px 0', color: '#6b7280' }}>Accedé con tu cuenta</p>
-        <form onSubmit={onSubmit}>
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Email</label>
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@email.com" style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, marginBottom: 12 }} />
-
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Contraseña</label>
-          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, marginBottom: 16 }} />
-
-          {error && (
-            <div style={{ background: '#fef2f2', color: '#991b1b', padding: '10px 12px', borderRadius: 8, marginBottom: 12, fontSize: 14 }}>
-              {error}
-            </div>
-          )}
-
-          <button type="submit" disabled={loading || !getSupabaseBrowserClient()} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, background: '#111827', color: '#fff', border: 'none', fontWeight: 600 }}>
-            {loading ? 'Ingresando…' : 'Ingresar'}
-          </button>
-          {!getSupabaseBrowserClient() && (
-            <p style={{ marginTop: 10, color:'#b91c1c', fontSize: 13 }}>
-              Variables de entorno no configuradas.
-            </p>
-          )}
-        </form>
-      </div>
-    </div>
+    <form onSubmit={onSubmit} style={{ maxWidth: 420, margin: '40px auto', padding: 16 }}>
+      <h1>Ingresar</h1>
+      <input
+        type="email" placeholder="Email" value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        style={{ width: '100%', padding: 8, marginBottom: 8 }} required
+      />
+      <input
+        type="password" placeholder="Contraseña" value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        style={{ width: '100%', padding: 8, marginBottom: 8 }} required
+      />
+      {err && <p style={{ color: 'crimson' }}>{err}</p>}
+      <button disabled={loading} type="submit" style={{ width: '100%', padding: 10 }}>
+        {loading ? 'Ingresando...' : 'Ingresar'}
+      </button>
+    </form>
   );
 }
