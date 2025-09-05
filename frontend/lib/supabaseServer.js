@@ -1,26 +1,17 @@
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 
-export function getSupabaseServerClient() {
-  const cookieStore = cookies();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+export async function getSSRClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) throw new Error('Supabase no configurado');
 
-  return createServerClient(url, key, {
+  const cookieStore = await cookies(); // Next 15
+  return createServerClient(url, anon, {
     cookies: {
-      get(name) {
-        return cookieStore.get(name)?.value;
-      },
-      set(name, value, options) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name, options) {
-        cookieStore.set({ name, value: '', ...options, maxAge: 0 });
-      },
-    },
-    headers: {
-      'x-forwarded-for': headers().get('x-forwarded-for') || undefined,
-      'user-agent': headers().get('user-agent') || undefined,
+      get: (name) => cookieStore.get(name)?.value,
+      set(name, value, options) { try { cookieStore.set({ name, value, ...options }); } catch {} },
+      remove(name, options) { try { cookieStore.set({ name, value: '', ...options, maxAge: 0 }); } catch {} },
     },
   });
 }

@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
-import { assertAllowedUser } from "../../../lib/authGuard"; // <-- agregar
+import { assertAuthenticated } from "../../../lib/authGuard";
+import { getSSRClient } from "../../../lib/supabaseServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const getSb = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Supabase no configurado");
-  return createClient(url, key, { auth: { persistSession: false } });
-};
+const getSb = () => getSSRClient(); // async
 
 const SELECT_BASE =
   "id_fondo,cliente_id,tipo_cartera:tipo_cartera_id(id_tipo_cartera,descripcion),plazo,tipo_plazo,fecha_alta,rend_esperado,deposito_inicial";
@@ -80,10 +75,10 @@ const updateSchema = z.object({
 const deleteSchema = z.object({ id: z.coerce.number().int().positive() });
 
 export async function GET(req) {
-  const auth = await assertAllowedUser(req); // <-- agregar
-  if (!auth.ok) return auth.res;            // <-- agregar
+  const auth = await assertAuthenticated(req);
+  if (!auth.ok) return auth.res;
   try {
-    const supabase = getSb();
+    const supabase = await getSb();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const clienteId = searchParams.get("cliente_id");
@@ -115,18 +110,17 @@ export async function GET(req) {
   }
 }
 
-// POST /api/fondo
 export async function POST(req) {
-  const auth = await assertAllowedUser(req); // <-- agregar
-  if (!auth.ok) return auth.res;            // <-- agregar
+  const auth = await assertAuthenticated(req);
+  if (!auth.ok) return auth.res;
   try {
+    const sb = await getSb();
     const body = await req.json().catch(() => ({}));
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const sb = getSb();
     const {
       cliente_id,
       tipo_cartera_id,
@@ -203,9 +197,10 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  const auth = await assertAllowedUser(req);
+  const auth = await assertAuthenticated(req);
   if (!auth.ok) return auth.res;
   try {
+    const supabase = await getSb();
     const body = await req.json().catch(() => ({}));
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) {
@@ -216,7 +211,6 @@ export async function PATCH(req) {
       return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
     }
 
-    const supabase = getSb();
     const { data, error } = await supabase
       .from("fondo")
       .update(changes)
@@ -233,16 +227,16 @@ export async function PATCH(req) {
 }
 
 export async function DELETE(req) {
-  const auth = await assertAllowedUser(req);
+  const auth = await assertAuthenticated(req);
   if (!auth.ok) return auth.res;
   try {
+    const supabase = await getSb();
     const body = await req.json().catch(() => ({}));
     const parsed = deleteSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Falta id válido" }, { status: 400 });
     }
 
-    const supabase = getSb();
     const { error } = await supabase.from("fondo").delete().eq("id_fondo", parsed.data.id);
     if (error) throw error;
 

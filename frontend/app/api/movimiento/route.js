@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
-import { assertAllowedUser } from "../../../lib/authGuard"; // <-- agregar
+import { assertAuthenticated } from "../../../lib/authGuard";
+import { getSSRClient } from "../../../lib/supabaseServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const getSb = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Supabase no configurado");
-  return createClient(url, key, { auth: { persistSession: false } });
-};
+const getSb = () => getSSRClient(); // async
 
 // SELECT con joins para nombres
 const SELECT_BASE =
@@ -103,7 +98,6 @@ const updateSchema = z.object({
 
 const deleteSchema = z.object({ id: z.coerce.number().int().positive() });
 
-// Esquema para upsert de precios desde CSV (moneda opcional, no se usa)
 const upsertPreciosSchema = z.object({
   action: z.literal("upsertPrecios"),
   fecha: z.union([ymd, z.string().datetime()]),
@@ -119,15 +113,13 @@ const upsertPreciosSchema = z.object({
 
 // GET
 export async function GET(req) {
-  const auth = await assertAllowedUser(req);
+  const auth = await assertAuthenticated(req);
   if (!auth.ok) return auth.res;
-
   try {
-    const sb = getSb();
+    const sb = await getSb();
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
 
-    // Nuevo: devolver último precio por especie (nombre + precio desde tipo_especie)
     if (action === "latestPrecios") {
       const { data, error } = await sb
         .from("precio_especie")
@@ -152,7 +144,6 @@ export async function GET(req) {
       return NextResponse.json({ data: Array.from(latestById.values()) });
     }
 
-    // Resto de GET movimientos
     const id = searchParams.get("id");
     const clienteId = searchParams.get("cliente_id");
     const fondoId = searchParams.get("fondo_id");
@@ -204,23 +195,21 @@ export async function GET(req) {
 
 // POST
 export async function POST(req) {
-  const auth = await assertAllowedUser(req); // <-- agregar
-  if (!auth.ok) return auth.res;            // <-- agregar
-
+  const auth = await assertAuthenticated(req);
+  if (!auth.ok) return auth.res;
   try {
+    const sb = await getSb();
     const body = await req.json().catch(() => ({}));
 
-    // Acción: upsert de precios desde CSV (fecha: timestamptz a inicio del día UTC)
+    // Acción: upsert de precios desde CSV
     if (body?.action === "upsertPrecios") {
       const parsed = upsertPreciosSchema.safeParse(body);
       if (!parsed.success) {
         const details = parsed.error.issues?.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
         return NextResponse.json({ error: `Datos inválidos: ${details}` }, { status: 400 });
       }
-      const sb = getSb();
       const startIso = toIsoStartOfDay(parsed.data.fecha) || toIsoStartOfDay(new Date().toISOString());
 
-      // rango del día para búsqueda (upsert manual por día)
       const dayStart = startIso;
       const dayEnd = (() => {
         const d = new Date(startIso);
@@ -298,16 +287,6 @@ export async function POST(req) {
     }
 
     // Alta de movimiento
-    const createSchema = z.object({
-      cliente_id: z.coerce.number().int().positive(),
-      fondo_id: z.coerce.number().int().positive(),
-      fecha_alta: z.union([ymd, z.string().datetime().optional()]).optional(),
-      tipo_mov: z.enum(["compra", "venta"]),
-      nominal: z.coerce.number().int().positive(),
-      precio_usd: z.coerce.number().optional().nullable(),
-      tipo_especie_id: z.coerce.number().int().positive().optional(),
-      especie: z.string().min(1).optional(),
-    });
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -324,10 +303,8 @@ export async function POST(req) {
       especie,
     } = parsed.data;
 
-    const sb = getSb();
-
-    async function assertFondoBelongs(sb, fondoId, clienteId) {
-      const { data, error } = await sb
+    async function assertFondoBelongs(client, fondoId, clienteId) {
+      const { data, error } = await client
         .from("fondo")
         .select("id_fondo,cliente_id")
         .eq("id_fondo", fondoId)
@@ -340,7 +317,7 @@ export async function POST(req) {
       }
     }
 
-    async function resolveTipoEspecieId(sb, maybeId, maybeName) {
+    async function resolveTipoEspecieId(client, maybeId, maybeName) {
       if (maybeId) return Number(maybeId);
       const name = (maybeName || "").trim();
       if (!name) {
@@ -348,7 +325,7 @@ export async function POST(req) {
         err.status = 400;
         throw err;
       }
-      let q = await sb
+      let q = await client
         .from("tipo_especie")
         .select("id_tipo_especie,nombre")
         .eq("nombre", name)
@@ -356,7 +333,7 @@ export async function POST(req) {
       if (q.error) throw q.error;
       if (q.data?.[0]) return Number(q.data[0].id_tipo_especie);
 
-      const q2 = await sb
+      const q2 = await client
         .from("tipo_especie")
         .select("id_tipo_especie,nombre")
         .ilike("nombre", name)
@@ -365,7 +342,7 @@ export async function POST(req) {
       const exactCI = (q2.data || []).find(r => String(r.nombre).toLowerCase() === name.toLowerCase());
       if (exactCI) return Number(exactCI.id_tipo_especie);
 
-      const ins = await sb
+      const ins = await client
         .from("tipo_especie")
         .insert({ nombre: name })
         .select("id_tipo_especie")
@@ -374,9 +351,9 @@ export async function POST(req) {
       return Number(ins.data.id_tipo_especie);
     }
 
-    async function computeDisponible(sb, cliente_id, fondo_id, tipo_especie_id, fecha_alta) {
+    async function computeDisponible(client, cliente_id, fondo_id, tipo_especie_id, fecha_alta) {
       const end = fecha_alta ? toIsoEndOfDay(fecha_alta) : null;
-      let q = sb
+      let q = client
         .from("movimiento")
         .select("tipo_mov,nominal")
         .eq("cliente_id", cliente_id)
@@ -433,10 +410,10 @@ export async function POST(req) {
 
 // PATCH
 export async function PATCH(req) {
-  const auth = await assertAllowedUser(req); // <-- agregar
-  if (!auth.ok) return auth.res;            // <-- agregar
-
+  const auth = await assertAuthenticated(req);
+  if (!auth.ok) return auth.res;
   try {
+    const sb = await getSb();
     const body = await req.json().catch(() => ({}));
     const parsed = z.object({
       id: z.coerce.number().int().positive(),
@@ -466,7 +443,6 @@ export async function PATCH(req) {
       especie,
     } = parsed.data;
 
-    const sb = getSb();
     const patch = {};
 
     if (cliente_id != null) patch.cliente_id = cliente_id;
@@ -477,7 +453,6 @@ export async function PATCH(req) {
     if (precio_usd !== undefined) patch.precio_usd = precio_usd ?? null;
 
     if (tipo_especie_id != null || especie != null) {
-      // resolve id
       const nameToId = async () => {
         if (tipo_especie_id) return Number(tipo_especie_id);
         const name = (especie || '').trim();
@@ -528,17 +503,16 @@ export async function PATCH(req) {
 
 // DELETE
 export async function DELETE(req) {
-  const auth = await assertAllowedUser(req); // <-- agregar
-  if (!auth.ok) return auth.res;            // <-- agregar
-
+  const auth = await assertAuthenticated(req);
+  if (!auth.ok) return auth.res;
   try {
+    const sb = await getSb();
     const body = await req.json().catch(() => ({}));
     const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Falta id válido" }, { status: 400 });
     }
 
-    const sb = getSb();
     const { error } = await sb.from("movimiento").delete().eq("id_movimiento", parsed.data.id);
     if (error) throw error;
 
