@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { assertAllowedUser } from '../../../lib/authGuard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,6 +64,9 @@ function normalize(row) {
 
 // GET /api/home → listar tareas
 export async function GET() {
+  const auth = await assertAllowedUser();
+  if (!auth?.ok) return auth.res;
+
   const res = await rest('/tarea?select=*&order=fecha.asc,id_tarea.asc', { method: 'GET' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -74,6 +78,9 @@ export async function GET() {
 
 // POST /api/home → crear tarea
 export async function POST(req) {
+  const auth = await assertAllowedUser(req);
+  if (!auth.ok) return auth.res;
+
   const body = await req.json().catch(() => ({}));
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -103,6 +110,9 @@ export async function POST(req) {
 
 // PATCH /api/home → editar tarea
 export async function PATCH(req) {
+  const auth = await assertAllowedUser(req);
+  if (!auth.ok) return auth.res;
+
   const body = await req.json().catch(() => ({}));
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
@@ -138,6 +148,9 @@ export async function PATCH(req) {
 
 // DELETE /api/home → borrar tarea
 export async function DELETE(req) {
+  const auth = await assertAllowedUser(req);
+  if (!auth.ok) return auth.res;
+
   const body = await req.json().catch(() => ({}));
   const parsed = deleteSchema.safeParse(body);
   if (!parsed.success) {

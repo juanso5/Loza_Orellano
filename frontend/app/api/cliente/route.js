@@ -2,7 +2,9 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { assertAllowedUser } from "../../../lib/authGuard";
 
 const getSb = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -79,6 +81,8 @@ function normalizeBody(body) {
 }
 
 export async function GET() {
+  const auth = await assertAllowedUser();
+  if (!auth?.ok) return auth.res;       
   try {
     const supabase = getSb();
     const { data, error } = await supabase
@@ -95,6 +99,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const auth = await assertAllowedUser(request);
+  if (!auth.ok) return auth.res;
   try {
     const body = await request.json().catch(() => ({}));
     const { error, values } = normalizeBody(body);
@@ -116,6 +122,8 @@ export async function POST(request) {
 }
 
 export async function PATCH(request) {
+  const auth = await assertAllowedUser(request);
+  if (!auth.ok) return auth.res;
   try {
     const body = await request.json().catch(() => ({}));
     const id = body.id ?? body.id_cliente;
@@ -187,6 +195,8 @@ export async function PATCH(request) {
 }
 
 export async function DELETE(request) {
+  const auth = await assertAllowedUser(request);
+  if (!auth.ok) return auth.res;
   try {
     const body = await request.json().catch(() => ({}));
     const id = body.id ?? body.id_cliente;

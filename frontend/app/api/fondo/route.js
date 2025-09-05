@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { assertAllowedUser } from "../../../lib/authGuard"; // <-- agregar
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +80,8 @@ const updateSchema = z.object({
 const deleteSchema = z.object({ id: z.coerce.number().int().positive() });
 
 export async function GET(req) {
+  const auth = await assertAllowedUser(req); // <-- agregar
+  if (!auth.ok) return auth.res;            // <-- agregar
   try {
     const supabase = getSb();
     const { searchParams } = new URL(req.url);
@@ -114,6 +117,8 @@ export async function GET(req) {
 
 // POST /api/fondo
 export async function POST(req) {
+  const auth = await assertAllowedUser(req); // <-- agregar
+  if (!auth.ok) return auth.res;            // <-- agregar
   try {
     const body = await req.json().catch(() => ({}));
     const parsed = createSchema.safeParse(body);
@@ -198,6 +203,8 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
+  const auth = await assertAllowedUser(req);
+  if (!auth.ok) return auth.res;
   try {
     const body = await req.json().catch(() => ({}));
     const parsed = updateSchema.safeParse(body);
@@ -226,6 +233,8 @@ export async function PATCH(req) {
 }
 
 export async function DELETE(req) {
+  const auth = await assertAllowedUser(req);
+  if (!auth.ok) return auth.res;
   try {
     const body = await req.json().catch(() => ({}));
     const parsed = deleteSchema.safeParse(body);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { assertAllowedUser } from "../../../lib/authGuard"; // <-- agregar
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,6 +119,9 @@ const upsertPreciosSchema = z.object({
 
 // GET
 export async function GET(req) {
+  const auth = await assertAllowedUser(req);
+  if (!auth.ok) return auth.res;
+
   try {
     const sb = getSb();
     const { searchParams } = new URL(req.url);
@@ -200,6 +204,9 @@ export async function GET(req) {
 
 // POST
 export async function POST(req) {
+  const auth = await assertAllowedUser(req); // <-- agregar
+  if (!auth.ok) return auth.res;            // <-- agregar
+
   try {
     const body = await req.json().catch(() => ({}));
 
@@ -426,6 +433,9 @@ export async function POST(req) {
 
 // PATCH
 export async function PATCH(req) {
+  const auth = await assertAllowedUser(req); // <-- agregar
+  if (!auth.ok) return auth.res;            // <-- agregar
+
   try {
     const body = await req.json().catch(() => ({}));
     const parsed = z.object({
@@ -518,6 +528,9 @@ export async function PATCH(req) {
 
 // DELETE
 export async function DELETE(req) {
+  const auth = await assertAllowedUser(req); // <-- agregar
+  if (!auth.ok) return auth.res;            // <-- agregar
+
   try {
     const body = await req.json().catch(() => ({}));
     const parsed = z.object({ id: z.coerce.number().int().positive() }).safeParse(body);
