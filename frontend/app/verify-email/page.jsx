@@ -1,20 +1,15 @@
 'use client';
-
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../lib/supabaseClient';
-
 export const dynamic = 'force-dynamic';
-
 function VerifyEmailInner() {
   const router = useRouter();
   const search = useSearchParams();
   const returnUrl = search?.get('returnUrl') || '/home';
-
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
-
   const resend = async () => {
     setErr(''); setMsg(''); setLoading(true);
     const supabase = getSupabaseBrowserClient();
@@ -33,7 +28,6 @@ function VerifyEmailInner() {
     else setMsg('Te enviamos un correo para verificar tu email.');
     setLoading(false);
   };
-
   const check = async () => {
     setErr(''); setMsg('Revisando verificación...');
     const supabase = getSupabaseBrowserClient();
@@ -43,13 +37,11 @@ function VerifyEmailInner() {
     if (confirmed) router.replace(`/mfa/setup?returnUrl=${encodeURIComponent(returnUrl)}`);
     else setMsg('Aún no figura verificado. Refrescá después de confirmar el email.');
   };
-
   const logout = async () => {
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.replace('/login');
   };
-
   return (
     <div style={{ maxWidth: 520, margin: '40px auto', padding: 16 }}>
       <h1>Verificá tu email</h1>
@@ -64,7 +56,6 @@ function VerifyEmailInner() {
     </div>
   );
 }
-
 export default function Page() {
   return (
     <Suspense fallback={<div style={{ padding: 24 }}>Cargando...</div>}>

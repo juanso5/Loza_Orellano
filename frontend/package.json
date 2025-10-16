@@ -6,7 +6,11 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.7.2",
@@ -16,6 +20,7 @@
     "@fullcalendar/timegrid": "^6.1.19",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",
+    "lucide-react": "^0.545.0",
     "next": "^15.5.0",
     "papaparse": "^5.4.1",
     "pg": "^8.16.3",
@@ -27,5 +32,13 @@
   },
   "engines": {
     "node": "20.x"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^27.0.0",
+    "vitest": "^3.2.4"
   }
 }

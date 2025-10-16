@@ -1,11 +1,8 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-
 // Tamaño de página conservador para equipos modestos
 const PAGE_SIZE = 100;
-
 const MovementsCtx = createContext(null);
-
 function reducer(state, action) {
   switch (action.type) {
     case 'RESET':
@@ -31,7 +28,6 @@ function reducer(state, action) {
       return state;
   }
 }
-
 export function MovementsProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, {
     items: [],
@@ -44,11 +40,9 @@ export function MovementsProvider({ children }) {
   const [clientIdFilter, setClientIdFilter] = useState(null); // NUEVO: filtro por cliente
   const [uploadState, setUploadState] = useState({ status: 'idle', message: '' });
   const abortRef = useRef(null);
-
   // NUEVO: precios latest desde DB y un "tick" para notificar cambios (CSV subido, altas/bajas)
   const [pricesMap, setPricesMap] = useState({}); // { normalizedName: price }
   const [tick, setTick] = useState(0);
-
   // util de normalización (similar a la versión previa)
   const normalizeSimple = useCallback((s) => {
     return (s || '')
@@ -60,7 +54,6 @@ export function MovementsProvider({ children }) {
       .replace(/\s+/g, '')
       .replace(/[^\w]/g, '');
   }, []);
-
   const loadLatestPrices = useCallback(async () => {
     try {
       const res = await fetch('/api/movimiento?action=latestPrecios', { cache: 'no-store' });
@@ -70,32 +63,33 @@ export function MovementsProvider({ children }) {
       const map = {};
       for (const r of arr) {
         const name = (r?.nombre || '').trim();
-        const price = Number(r?.precio);
-        if (!name || !Number.isFinite(price) || price <= 0) continue;
+        // Usar precio_usd (normalizado en USD) en lugar de precio
+        const priceUSD = Number(r?.precio_usd);
+        if (!name || !Number.isFinite(priceUSD) || priceUSD <= 0) continue;
         const k = normalizeSimple(name);
-        map[k] = price;
+        map[k] = priceUSD;
         // alias AL30 -> AL30D (si aplica)
-        if (k && !k.endsWith('d')) map[`${k}d`] = price;
+        if (k && !k.endsWith('d')) map[`${k}d`] = priceUSD;
       }
       setPricesMap(map);
     } catch {
       setPricesMap({});
     }
   }, [normalizeSimple]);
-
-  useEffect(() => { loadLatestPrices(); }, [loadLatestPrices]);
-
+  // Cargar precios al montar el provider
+  useEffect(() => { 
+    loadLatestPrices(); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo al montar
   const refreshPrices = useCallback(async () => {
     await loadLatestPrices();
     setTick((t) => t + 1);
   }, [loadLatestPrices]);
-
   // Data fetching con cancelación
   const fetchPage = useCallback(async (pageIdx, append) => {
     if (abortRef.current) abortRef.current.abort();
     const ac = new AbortController();
     abortRef.current = ac;
-
     dispatch({ type: 'LOAD_START' });
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
@@ -117,23 +111,18 @@ export function MovementsProvider({ children }) {
       dispatch({ type: 'LOAD_ERROR', error: e?.message || String(e) });
     }
   }, []);
-
   const fetchFirstPage = useCallback(() => fetchPage(0, false), [fetchPage]);
-
   const fetchNextPage = useCallback(() => {
     if (state.loading || !state.hasMore) return;
     fetchPage(state.page, true);
   }, [fetchPage, state.loading, state.hasMore, state.page]);
-
   // Cargar la primera página al montar
   useEffect(() => { fetchFirstPage(); }, [fetchFirstPage]);
-
   const refreshFirstPage = useCallback(() => {
     dispatch({ type: 'RESET' });
     fetchFirstPage();
     setTick((t) => t + 1); // notificar a tarjetas de holdings que datos cambiaron
   }, [fetchFirstPage]);
-
   const deleteMovement = useCallback(async (id) => {
     try {
       const res = await fetch('/api/movimiento', {
@@ -151,7 +140,6 @@ export function MovementsProvider({ children }) {
       alert(e?.message || 'Error eliminando movimiento');
     }
   }, []);
-
   // Filtro de búsqueda memoizado (client-side sobre lo ya cargado)
   const filteredItems = useMemo(() => {
     const q = (query || '').trim().toLowerCase();
@@ -169,7 +157,6 @@ export function MovementsProvider({ children }) {
       );
     });
   }, [state.items, query, clientIdFilter]);
-
   const value = useMemo(() => ({
     items: state.items,
     filteredItems,
@@ -190,12 +177,34 @@ export function MovementsProvider({ children }) {
     tick,
     normalizeSimple,
   }), [state, filteredItems, query, clientIdFilter, uploadState, fetchNextPage, fetchFirstPage, refreshFirstPage, deleteMovement, pricesMap, refreshPrices, tick, normalizeSimple]);
-
   return <MovementsCtx.Provider value={value}>{children}</MovementsCtx.Provider>;
 }
-
 export const useMovements = () => {
   const ctx = useContext(MovementsCtx);
-  if (!ctx) throw new Error('useMovements debe usarse dentro de MovementsProvider');
+  if (!ctx) {
+    // Devolver valores por defecto seguros
+    return {
+      items: [],
+      filteredItems: [],
+      loading: false,
+      error: '',
+      hasMore: false,
+      page: 0,
+      query: '',
+      setQuery: () => {},
+      clientIdFilter: null,
+      setClientIdFilter: () => {},
+      uploadState: { status: 'idle', message: '' },
+      setUploadState: () => {},
+      fetchNextPage: () => {},
+      fetchFirstPage: () => {},
+      refreshFirstPage: () => {},
+      deleteMovement: () => {},
+      pricesMap: {},
+      refreshPrices: () => {},
+      tick: 0,
+      normalizeSimple: (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+    };
+  }
   return ctx;
 };

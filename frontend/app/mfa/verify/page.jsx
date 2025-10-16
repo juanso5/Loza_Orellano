@@ -1,45 +1,36 @@
 'use client';
-
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../../lib/supabaseClient';
-
 export const dynamic = 'force-dynamic';
-
 function MfaVerifyInner() {
   const router = useRouter();
   const search = useSearchParams();
   const returnUrl = search?.get('returnUrl') || '/home';
-
   const [loading, setLoading] = useState(true);
   const [factorId, setFactorId] = useState('');
   const [challengeId, setChallengeId] = useState('');
   const [code, setCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-
   useEffect(() => {
     const run = async () => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) return;
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.replace('/login?reason=need-auth');
         return;
       }
-
       const emailConfirmed = user.email_confirmed_at || user.confirmed_at;
       if (!emailConfirmed) {
         router.replace(`/verify-email?returnUrl=${encodeURIComponent(returnUrl)}`);
         return;
       }
-
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal?.currentLevel === 'aal2') {
         router.replace(returnUrl);
         return;
       }
-
       const { data: factors, error: lfErr } = await supabase.auth.mfa.listFactors();
       if (lfErr) {
         setErrorMsg(lfErr.message);
@@ -51,7 +42,6 @@ function MfaVerifyInner() {
         router.replace(`/mfa/setup?returnUrl=${encodeURIComponent(returnUrl)}`);
         return;
       }
-
       const { data: chal, error } = await supabase.auth.mfa.challenge({ factorId: totp.id });
       if (error) {
         setErrorMsg(error.message || 'No se pudo iniciar el desafío MFA');
@@ -64,13 +54,11 @@ function MfaVerifyInner() {
     };
     run();
   }, [router, returnUrl]);
-
   const onSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
-
     const digits = code.replace(/\D/g, '');
     const { error } = await supabase.auth.mfa.verify({
       factorId,
@@ -81,20 +69,16 @@ function MfaVerifyInner() {
       setErrorMsg(error.message || 'Código incorrecto. Verificá la hora del dispositivo.');
       return;
     }
-
     await supabase.auth.getSession();
     const { data: aal2 } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     router.replace(aal2?.currentLevel === 'aal2' ? returnUrl : '/home');
   };
-
   const handleCancel = async () => {
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.replace('/login?canceledMfa=1');
   };
-
   if (loading) return <div style={{ padding: 24 }}>Verificando MFA...</div>;
-
   return (
     <div style={{ maxWidth: 420, margin: '40px auto', padding: 16 }}>
       <h1>Verificar MFA</h1>
@@ -123,7 +107,6 @@ function MfaVerifyInner() {
     </div>
   );
 }
-
 export default function Page() {
   return (
     <Suspense fallback={<div style={{ padding: 24 }}>Cargando...</div>}>

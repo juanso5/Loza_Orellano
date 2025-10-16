@@ -1,21 +1,17 @@
 // components/Sidebar.jsx
 'use client';
-
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 // Using global sidebar.css styles (legacy like)
-
 export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggleProp }) {
   const pathname = usePathname();
   const router = useRouter();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const collapsedControlled = typeof collapsedProp !== 'undefined';
   const collapsed = collapsedControlled ? collapsedProp : internalCollapsed;
-
-
   useEffect(() => {
     // initialize collapsed from localStorage if not controlled by props
     if (!collapsedControlled) {
@@ -27,12 +23,10 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
       }
     }
   }, [collapsedControlled]);
-
   useEffect(() => {
     // if props change, leave to parent (handled by collapsedControlled)
     // nothing to do here
   }, [collapsedProp]);
-
   const toggle = () => {
     if (toggleProp) return toggleProp();
     setInternalCollapsed((prev) => {
@@ -41,14 +35,11 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
       return next;
     });
   };
-
   const isActive = (path) => {
     if (!pathname) return false;
     return pathname === path || pathname.startsWith(path + '/');
   };
-
   // (Submenús eliminados; ya no se requiere estado de submenús)
-
   return (
     <div id="sidebar" className={`sidebar ${collapsed ? 'collapsed' : ''}`}>      
       <button id="sidebar-toggle" className="sidebar-toggle" onClick={toggle} aria-expanded={!collapsed} aria-label="Alternar sidebar">
@@ -61,11 +52,17 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
         <li className={isActive('/cliente') ? 'active' : ''}>
           <Link href="/cliente"><i className="fas fa-users" /> <span className="menu-text">Clientes</span></Link>
         </li>
+        <li className={isActive('/fondos') ? 'active' : ''}>
+          <Link href="/fondos"><i className="fas fa-wallet" /> <span className="menu-text">Fondos</span></Link>
+        </li>
+        <li className={isActive('/liquidez') ? 'active' : ''}>
+          <Link href="/liquidez"><i className="fas fa-dollar-sign" /> <span className="menu-text">Liquidez</span></Link>
+        </li>
         <li className={isActive('/movimientos') ? 'active' : ''}>
           <Link href="/movimientos"><i className="fas fa-exchange-alt" /> <span className="menu-text">Movimientos</span></Link>
         </li>
-        <li className={isActive('/fondos') ? 'active' : ''}>
-          <Link href="/fondos"><i className="fas fa-wallet" /> <span className="menu-text">Fondos</span></Link>
+        <li className={isActive('/rendimientos') ? 'active' : ''}>
+          <Link href="/rendimientos"><i className="fas fa-chart-line" /> <span className="menu-text">Rendimientos</span></Link>
         </li>
         <li>
           <button
@@ -75,7 +72,6 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
             <i className="fas fa-sign-out-alt" /> <span className="menu-text">Salir</span>
           </button>
         </li>
-  {/* Ruta de rendimientos aún no implementada */}
       </ul>
     </div>
   );

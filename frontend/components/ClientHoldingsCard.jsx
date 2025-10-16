@@ -1,14 +1,12 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMovements } from './MovementsProvider';
-
 function fmtCurrency(n) {
   return Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 });
 }
 function fmtNumber(n) {
   return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
 }
-
 export default function ClientHoldingsCard({ client, onAdd }) {
   const { pricesMap, tick, normalizeSimple } = useMovements();
   const rootRef = useRef(null);
@@ -18,7 +16,6 @@ export default function ClientHoldingsCard({ client, onAdd }) {
   const [loading, setLoading] = useState(false);
   const [funds, setFunds] = useState([]); // [{id, name}]
   const [movs, setMovs] = useState([]);   // movimientos del cliente
-
   // Observa entrada al viewport para cargar perezoso
   useEffect(() => {
     const el = rootRef.current;
@@ -36,7 +33,6 @@ export default function ClientHoldingsCard({ client, onAdd }) {
     io.observe(el);
     return () => { try { io.disconnect(); } catch {} };
   }, []);
-
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -48,7 +44,7 @@ export default function ClientHoldingsCard({ client, onAdd }) {
       const jm = await rm.json();
       const fundsArr = (Array.isArray(jf?.data) ? jf.data : []).map(f => ({
         id: Number(f.id ?? f.id_fondo ?? f.fondo_id ?? 0),
-        name: f?.tipo_cartera?.descripcion || f?.descripcion || f?.name || `Cartera ${f?.id ?? ''}`,
+        name: f?.nombre || f?.tipo_cartera?.descripcion || f?.descripcion || f?.name || `Cartera ${f?.id ?? ''}`,
       }));
       const movArr = (Array.isArray(jm?.data) ? jm.data : []).map(m => ({
         fondo_id: Number(m.fondo_id) || null,
@@ -66,14 +62,12 @@ export default function ClientHoldingsCard({ client, onAdd }) {
       setLoading(false);
     }
   }, [client.id]);
-
   // Cargar al hacerse visible por primera vez o al expandir
   useEffect(() => {
     if ((visible || expanded) && !hasLoaded) {
       loadData();
     }
   }, [visible, expanded, hasLoaded, loadData]);
-
   // Si cambian movimientos globales (tick), refrescar si ya cargó (y está visible/expandido)
   useEffect(() => {
     if ((visible || expanded) && hasLoaded) {
@@ -81,13 +75,11 @@ export default function ClientHoldingsCard({ client, onAdd }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
-
   // Agregación + valorización
   const { byPortfolio, totalValue } = useMemo(() => {
     // Mapa: pid -> Map(especieLower -> { name, nominal, value })
     const portMap = new Map();
     const getSigned = (tipo, n) => (tipo === 'venta' ? -1 : 1) * Number(n || 0);
-
     for (const m of movs) {
       const pid = Number(m.fondo_id) || null;
       if (!pid) continue;
@@ -100,7 +92,6 @@ export default function ClientHoldingsCard({ client, onAdd }) {
       prev.nominal += getSigned(m.tipo_mov, m.nominal);
       inner.set(key, prev);
     }
-
     // Valorización con pricesMap
     let total = 0;
     portMap.forEach((inner) => {
@@ -112,10 +103,8 @@ export default function ClientHoldingsCard({ client, onAdd }) {
         if (!Number.isNaN(rec.value)) total += rec.value;
       });
     });
-
     return { byPortfolio: portMap, totalValue: total };
   }, [movs, pricesMap, normalizeSimple]);
-
   // Render
   const initials = client.name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
   return (
@@ -149,7 +138,6 @@ export default function ClientHoldingsCard({ client, onAdd }) {
           </button>
         </div>
       </div>
-
       {expanded && (
         // Forzar display:block para evitar estilos globales que ocultan .client-body
         <div className="client-body" style={{ display: 'block', background: '#fff' }}>

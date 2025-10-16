@@ -1,319 +1,547 @@
-// components/AddPortfolioModal.jsx
-import React, { useState, useEffect, useMemo, useRef } from "react";
-
-// YYYY-MM-DD para <input type="date">
-function toDateInputValue(d) {
-  if (!d) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-// DD-MM-YYYY para mostrar
-function toDisplayDMY(d) {
-  if (!d) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
-}
-
-// Parse seguro desde YYYY-MM-DD a Date (local)
-function parseDateInput(v) {
-  if (!v || typeof v !== "string") return null;
-  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  const date = new Date(y, mo - 1, d, 0, 0, 0, 0);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
-}
-
-function computeEndDate(fechaAltaInput, tipoPlazo, periodo) {
-  if (!fechaAltaInput || !periodo) return null;
-  const start = parseDateInput(fechaAltaInput);
-  if (!start) return null;
-
-  const end = new Date(start);
-  const p = Number(periodo) || 0;
-  if (p <= 0) return null;
-
-  const t = String(tipoPlazo || "").toLowerCase();
-  if (t === "meses") {
-    end.setMonth(end.getMonth() + p);
-  } else if (t === "dias" || t === "días") {
-    end.setDate(end.getDate() + p);
-  } else if (t === "año" || t === "años" || t === "anio" || t === "anios") {
-    end.setFullYear(end.getFullYear() + p);
-  } else {
-    return null;
-  }
-  return end;
-}
-
-const AddPortfolioModal = ({ onClose, onSave, uid, existingNames = [] }) => {
-  const [name, setName] = useState("");
-  const [period, setPeriod] = useState("");
-  const [tipoPlazo, setTipoPlazo] = useState("meses"); // meses | dias | años (solo visual)
-  const [fechaAlta, setFechaAlta] = useState(() => toDateInputValue(new Date())); // YYYY-MM-DD para input
-  const [rendEsperado, setRendEsperado] = useState("");
-  const [depositoInicial, setDepositoInicial] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const nameRef = useRef(null);
-
-  // Autofocus en nombre
+'use client';
+import { useState, useEffect, useMemo } from 'react';
+/**
+ * AddPortfolioModal - Crear nueva cartera con campos dinámicos según estrategia
+ * 
+ * Props:
+ * - onClose: función para cerrar el modal
+ * - onSave: función callback que recibe el payload para crear el fondo
+ * - clienteId: ID del cliente (opcional, si no se pasa se pide seleccionar)
+ */
+export default function AddPortfolioModal({ onClose, onSave, clienteId = null }) {
+  // Estados
+  const [loading, setLoading] = useState(false);
+  const [clientes, setClientes] = useState([]);
+  const [tiposCartera, setTiposCartera] = useState([]);
+  const [liquidezDisponible, setLiquidezDisponible] = useState(null);
+  // Formulario base
+  const [clienteIdForm, setClienteIdForm] = useState(clienteId || '');
+  const [tipoCarteraId, setTipoCarteraId] = useState('');
+  const [liquidezInicial, setLiquidezInicial] = useState('');
+  const [nombreFondo, setNombreFondo] = useState('');
+  // Campos de metadata dinámicos
+  const [metadata, setMetadata] = useState({});
+  // Cargar clientes
   useEffect(() => {
-    nameRef.current?.focus();
+    if (clienteId) return; // Si ya tenemos cliente, no cargamos
+    fetch('/api/cliente', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        const list = Array.isArray(j?.data) ? j.data : [];
+        setClientes(list.map(c => ({
+          id: Number(c.id ?? c.id_cliente),
+          nombre: c.name || c.nombre || 'Sin nombre'
+        })));
+      })
+      .catch(err => {/* Error al cargar clientes */});
+  }, [clienteId]);
+  // Cargar tipos de cartera
+  useEffect(() => {
+    fetch('/api/tipo-cartera', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        const list = Array.isArray(j?.data) ? j.data : [];
+        // Filtrar solo los activos y ordenar
+        setTiposCartera(list.filter(t => t.activo));
+      })
+      .catch(err => {/* Error al cargar tipos de cartera */});
   }, []);
-
-  // Cerrar con Escape
+  // Cargar liquidez disponible cuando se selecciona cliente
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose?.();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
+    const cid = clienteIdForm || clienteId;
+    if (!cid) {
+      setLiquidezDisponible(null);
+      return;
+    }
+    fetch(`/api/liquidez/estado?cliente_id=${cid}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) {
+          setLiquidezDisponible(j.data.liquidezDisponible || 0);
+        }
+      })
+      .catch(err => {/* Error al cargar liquidez */});
+  }, [clienteIdForm, clienteId]);
+  // Limpiar metadata cuando cambia el tipo de cartera
+  useEffect(() => {
+    setMetadata({});
+  }, [tipoCarteraId]);
+  // Obtener la categoría del tipo de cartera seleccionado
+  const categoriaSeleccionada = useMemo(() => {
+    const tipo = tiposCartera.find(t => Number(t.id) === Number(tipoCarteraId));
+    if (!tipo?.categoria) return null;
+    // Normalizar categoría a minúsculas para comparación
+    return tipo.categoria.trim().toLowerCase();
+  }, [tipoCarteraId, tiposCartera]);
   // Validaciones
-  const periodNum = Number.isFinite(parseInt(period, 10)) ? parseInt(period, 10) : NaN;
-  const fechaValida = useMemo(() => !!parseDateInput(fechaAlta), [fechaAlta]);
-
   const errors = useMemo(() => {
-    const es = {};
-    if (name && existingNames.map((n) => n.toLowerCase().trim()).includes(name.toLowerCase().trim())) {
-      es.name = "Ya existe una cartera con ese nombre.";
+    const errs = {};
+    if (!clienteIdForm && !clienteId) {
+      errs.cliente = 'Debe seleccionar un cliente';
     }
-    if (!Number.isFinite(periodNum) || periodNum < 1) es.period = "";
-    if (!fechaValida) es.fechaAlta = "Ingresá una fecha válida.";
-    if (rendEsperado !== "" && !Number.isFinite(Number(rendEsperado))) {
-      es.rendEsperado = "Debe ser un número.";
+    if (!tipoCarteraId || tipoCarteraId === '' || tipoCarteraId === '0') {
+      errs.tipo_cartera = 'Debe seleccionar un tipo de cartera';
     }
-    if (depositoInicial !== "" && (!Number.isFinite(Number(depositoInicial)) || Number(depositoInicial) < 0)) {
-      es.depositoInicial = "Debe ser un número mayor o igual a 0.";
+    if (!nombreFondo || nombreFondo.trim() === '') {
+      errs.nombre = 'El nombre del fondo es requerido';
     }
-    return es;
-  }, [name, existingNames, periodNum, fechaValida, rendEsperado, depositoInicial]);
-
-  const isSaveDisabled = submitting || Object.keys(errors).length > 0;
-
-  // Preview de fecha fin (DD-MM-YYYY)
-  const endDate = useMemo(() => computeEndDate(fechaAlta, tipoPlazo, periodNum), [fechaAlta, tipoPlazo, periodNum]);
-
-  const handleSave = async () => {
-    if (isSaveDisabled) return;
-    try {
-      setSubmitting(true);
-      const payload = {
-        id: uid?.("p"),
-        name: name.trim(),
-        // Mantener periodo en meses para backend (consistente con tu página)
-        periodMonths:
-          String(tipoPlazo).toLowerCase() === "meses"
-            ? periodNum
-            : String(tipoPlazo).toLowerCase().startsWith("a")
-            ? periodNum * 12
-            : Math.round(periodNum / 30),
-        // Estos campos son opcionales para tu POST /api/fondo
-        tipo_plazo: String(tipoPlazo).toLowerCase() === "dias" || String(tipoPlazo).toLowerCase() === "días" ? "dias" : "meses",
-        fecha_alta: fechaAlta, // YYYY-MM-DD (backend acepta este formato)
-        rend_esperado: rendEsperado === "" ? null : Number(rendEsperado),
-        deposito_inicial: depositoInicial === "" ? null : Number(depositoInicial),
-        progress: 0,
-        funds: [],
-      };
-      await onSave?.(payload);
-      onClose?.();
-    } finally {
-      setSubmitting(false);
+    if (nombreFondo && nombreFondo.length > 255) {
+      errs.nombre = 'El nombre no puede superar los 255 caracteres';
     }
-  };
-
-  const handleSubmit = (e) => {
+    if (liquidezInicial && parseFloat(liquidezInicial) < 0) {
+      errs.liquidez_inicial = 'La liquidez debe ser mayor o igual a 0';
+    }
+    if (liquidezInicial && liquidezDisponible !== null && parseFloat(liquidezInicial) > liquidezDisponible) {
+      errs.liquidez_inicial = `Solo hay $${liquidezDisponible.toFixed(2)} USD disponibles`;
+    }
+    // Validaciones por estrategia
+  if (categoriaSeleccionada === 'jubilacion') {
+      if (!metadata.anos) errs.anos = 'Requerido';
+      if (metadata.anos && Number(metadata.anos) <= 0) {
+        errs.anos = 'Debe ser mayor a 0';
+      }
+  } else if (categoriaSeleccionada === 'largo_plazo') {
+      // No hay campos obligatorios
+  } else if (categoriaSeleccionada === 'viajes') {
+      if (!metadata.monto_objetivo_usd || parseFloat(metadata.monto_objetivo_usd) <= 0) {
+        errs.monto_objetivo_usd = 'Monto objetivo en USD es requerido';
+      }
+  } else if (categoriaSeleccionada === 'objetivo') {
+      if (!metadata.fecha_objetivo) errs.fecha_objetivo = 'Requerido';
+      if (!metadata.monto_objetivo_usd || parseFloat(metadata.monto_objetivo_usd) <= 0) {
+        errs.monto_objetivo_usd = 'Monto objetivo en USD es requerido';
+      }
+    }
+    return errs;
+  }, [clienteIdForm, clienteId, tipoCarteraId, liquidezInicial, liquidezDisponible, categoriaSeleccionada, metadata]);
+  const canSubmit = Object.keys(errors).length === 0 && !loading;
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isSaveDisabled) handleSave();
-  };
-
-  // Cerrar al hacer click fuera del modal (overlay)
-  const handleOverlayMouseDown = (e) => {
-    if (e.target === e.currentTarget && !submitting) {
-      onClose?.();
+    if (!canSubmit) return;
+    setLoading(true);
+    try {
+      // Validar que tipo_cartera_id no esté vacío
+      if (!tipoCarteraId || tipoCarteraId === '') {
+        alert('Debe seleccionar una estrategia');
+        setLoading(false);
+        return;
+      }
+      const payload = {
+        cliente_id: Number(clienteIdForm || clienteId),
+        tipo_cartera_id: Number(tipoCarteraId),
+        nombre: nombreFondo.trim(),
+        deposito_inicial: 0,
+        rend_esperado: metadata.rend_esperado ? parseFloat(metadata.rend_esperado) : null,
+        plazo: null,
+        tipo_plazo: null,
+        liquidez_inicial: liquidezInicial ? parseFloat(liquidezInicial) : 0,
+        metadata: null,
+      };
+      // Agregar metadata según la estrategia
+      if (categoriaSeleccionada) {
+        const metadataParsed = { estrategia: categoriaSeleccionada };
+        // Parsear campos según estrategia
+        if (categoriaSeleccionada === 'jubilacion') {
+          const anosNum = Number(metadata.anos);
+          if (!isNaN(anosNum) && anosNum > 0) {
+            metadataParsed.anos = anosNum;
+          } else {
+            throw new Error('Años objetivo es requerido y debe ser mayor a 0');
+          }
+          if (metadata.comentario) metadataParsed.comentario = metadata.comentario;
+        } else if (categoriaSeleccionada === 'largo_plazo') {
+          if (metadata.comentario) metadataParsed.comentario = metadata.comentario;
+        } else if (categoriaSeleccionada === 'viajes') {
+          // USD + Tipo de Cambio
+          const usd = parseFloat(metadata.monto_objetivo_usd);
+          if (!usd || usd <= 0) {
+            throw new Error('Monto objetivo en USD es requerido');
+          }
+          metadataParsed.monto_objetivo_usd = usd;
+          // Tipo de cambio opcional
+          if (metadata.tipo_cambio) {
+            const tc = parseFloat(metadata.tipo_cambio);
+            if (tc > 0) {
+              metadataParsed.tipo_cambio = tc;
+              metadataParsed.monto_objetivo_ars = usd * tc;
+            }
+          }
+          if (metadata.comentario) metadataParsed.comentario = metadata.comentario;
+        } else if (categoriaSeleccionada === 'objetivo') {
+          if (!metadata.fecha_objetivo) {
+            throw new Error('Fecha objetivo es requerida');
+          }
+          metadataParsed.fecha_objetivo = metadata.fecha_objetivo;
+          // USD + Tipo de Cambio
+          const usd = parseFloat(metadata.monto_objetivo_usd);
+          if (!usd || usd <= 0) {
+            throw new Error('Monto objetivo en USD es requerido');
+          }
+          metadataParsed.monto_objetivo_usd = usd;
+          // Tipo de cambio opcional
+          if (metadata.tipo_cambio) {
+            const tc = parseFloat(metadata.tipo_cambio);
+            if (tc > 0) {
+              metadataParsed.tipo_cambio = tc;
+              metadataParsed.monto_objetivo_ars = usd * tc;
+            }
+          }
+          if (metadata.comentario) metadataParsed.comentario = metadata.comentario;
+        }
+        payload.metadata = metadataParsed;
+      }
+      await onSave(payload);
+      onClose();
+    } catch (err) {
+      alert(err.message || 'Error al crear la cartera');
+    } finally {
+      setLoading(false);
     }
   };
-
   return (
-    <div
-      className="modal"
-      style={{ display: "flex" }}
+    <div 
+      className="modal" 
+      style={{ display: 'flex' }}
       aria-hidden="false"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-portfolio-title"
-      onMouseDown={handleOverlayMouseDown}
+      onClick={(e) => e.target === e.currentTarget && !loading && onClose()}
     >
       <div className="modal-dialog">
-        <form onSubmit={handleSubmit} noValidate>
-          <header className="modal-header">
-            <h2 id="add-portfolio-title">Agregar nueva cartera</h2>
-            <button
-              type="button"
-              className="modal-close"
-              onClick={onClose}
-              aria-label="Cerrar"
-              disabled={submitting}
-            >
-              &times;
-            </button>
-          </header>
-
-          <div className="modal-body">
-            <div className="input-group">
-              <label htmlFor="add-portfolio-name">
-                Nombre de la cartera <span className="required">*</span>
-              </label>
-              <input
-                id="add-portfolio-name"
-                ref={nameRef}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                aria-invalid={errors.name ? "true" : "false"}
-                aria-describedby={errors.name ? "err-name" : undefined}
-                disabled={submitting}
-              />
-              {errors.name && (
-                <div className="error-message" id="err-name">
-                  {errors.name}
-                </div>
-              )}
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="tipo-plazo">Tipo de plazo</label>
-              <select
-                id="tipo-plazo"
-                value={tipoPlazo}
-                onChange={(e) => setTipoPlazo(e.target.value)}
-                disabled={submitting}
+        <header className="modal-header">
+          <h2>Agregar Nuevo Fondo</h2>
+          <button type="button" className="modal-close" onClick={onClose} disabled={loading}>×</button>
+        </header>
+        <form onSubmit={handleSubmit} className="modal-body">
+          {/* Cliente */}
+          {!clienteId && (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span>Cliente <span style={{ color: '#d32f2f' }}>*</span></span>
+              <select 
+                value={clienteIdForm} 
+                onChange={(e) => setClienteIdForm(e.target.value)}
+                required
+                disabled={loading}
               >
-                <option value="dias">Días</option>
-                <option value="meses">Meses</option>
-                <option value="años">Años</option>
+                <option value="">Seleccionar cliente</option>
+                {clientes.map(c => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
               </select>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="add-portfolio-period">
-                Periodo objetivo ({tipoPlazo}) <span className="required">*</span>
-              </label>
-              <input
-                id="add-portfolio-period"
-                type="number"
-                min="1"
-                step="1"
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                aria-invalid={errors.period ? "true" : "false"}
-                aria-describedby={errors.period ? "err-period" : undefined}
-                disabled={submitting}
-              />
-              {errors.period && (
-                <div className="error-message" id="err-period">
-                  {errors.period}
-                </div>
-              )}
-              <div className="hint muted">
-                {endDate ? `Termina el: ${toDisplayDMY(endDate)}` : ""}
-              </div>
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="fecha-alta">
-                Fecha de alta <span className="required">*</span>
-              </label>
-              <input
-                id="fecha-alta"
-                type="date"
-                value={fechaAlta}
-                onChange={(e) => setFechaAlta(e.target.value)}
-                aria-invalid={errors.fechaAlta ? "true" : "false"}
-                aria-describedby={errors.fechaAlta ? "err-fecha" : undefined}
-                disabled={submitting}
-              />
-              {errors.fechaAlta && (
-                <div className="error-message" id="err-fecha">
-                  {errors.fechaAlta}
-                </div>
-              )}
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="rend-esperado">Rendimiento esperado (opcional)</label>
-              <input
-                id="rend-esperado"
-                type="number"
-                step="any"
-                value={rendEsperado}
-                onChange={(e) => setRendEsperado(e.target.value)}
-                aria-invalid={errors.rendEsperado ? "true" : "false"}
-                aria-describedby={errors.rendEsperado ? "err-rend" : undefined}
-                disabled={submitting}
-              />
-              {errors.rendEsperado && (
-                <div className="error-message" id="err-rend">
-                  {errors.rendEsperado}
-                </div>
-              )}
-            </div>
-
-            <div className="input-group">
-              <label htmlFor="deposito-inicial">Depósito inicial (opcional)</label>
-              <input
-                id="deposito-inicial"
-                type="number"
-                step="any"
-                min="0"
-                value={depositoInicial}
-                onChange={(e) => setDepositoInicial(e.target.value)}
-                aria-invalid={errors.depositoInicial ? "true" : "false"}
-                aria-describedby={errors.depositoInicial ? "err-dep" : undefined}
-                disabled={submitting}
-              />
-              {errors.depositoInicial && (
-                <div className="error-message" id="err-dep">
-                  {errors.depositoInicial}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <footer className="modal-footer">
-            <button
-              type="submit"
-              className="btn-save"
-              disabled={isSaveDisabled}
-              aria-disabled={isSaveDisabled}
+              {errors.cliente && <small style={{ color: '#d32f2f' }}>{errors.cliente}</small>}
+            </label>
+          )}
+          {/* Tipo de Cartera */}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span>Estrategia <span style={{ color: '#d32f2f' }}>*</span></span>
+            <select 
+              value={tipoCarteraId} 
+              onChange={(e) => setTipoCarteraId(e.target.value)}
+              required
+              disabled={loading}
             >
-              {submitting ? (
-                <>
-                  <i className="fas fa-spinner fa-spin"></i> Guardando…
-                </>
-              ) : (
-                <>
-                  <i className="fas fa-check"></i> Guardar
-                </>
+              <option value="">Seleccionar estrategia</option>
+              {tiposCartera.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.descripcion}
+                </option>
+              ))}
+            </select>
+            {errors.tipo_cartera && <small style={{ color: '#d32f2f' }}>{errors.tipo_cartera}</small>}
+          </label>
+          {/* Nombre del Fondo */}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span>Nombre del Fondo <span style={{ color: '#d32f2f' }}>*</span></span>
+            <input
+              type="text"
+              value={nombreFondo}
+              onChange={(e) => setNombreFondo(e.target.value)}
+              required
+              disabled={loading}
+              placeholder="Ej: Auto 0km, Viaje a Europa, Casa propia, etc."
+              maxLength={255}
+            />
+            <small style={{ color: '#666' }}>
+              Nombre personalizado para identificar este fondo
+            </small>
+            {errors.nombre && <small style={{ color: '#d32f2f' }}>{errors.nombre}</small>}
+          </label>
+          {/* Campos dinámicos según estrategia */}
+          {categoriaSeleccionada === 'jubilacion' && (
+            <>
+              <div style={{ 
+                padding: 12, 
+                backgroundColor: '#f0f9ff', 
+                borderLeft: '4px solid #4CAF50',
+                borderRadius: 4 
+              }}>
+                <strong style={{ color: '#2e7d32' }}>📊 Cartera Jubilación (USD)</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: '#1b5e20' }}>
+                  Planificá tu retiro a largo plazo
+                </p>
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Años Objetivo <span style={{ color: '#d32f2f' }}>*</span></span>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={metadata.anos || ''}
+                  onChange={(e) => setMetadata({ ...metadata, anos: e.target.value })}
+                  required
+                  disabled={loading}
+                  placeholder="Ej: 20"
+                />
+                <small style={{ color: '#666' }}>¿Cuántos años faltan para tu jubilación?</small>
+                {errors.anos && <small style={{ color: '#d32f2f' }}>{errors.anos}</small>}
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Rendimiento Esperado (%)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={metadata.rend_esperado || ''}
+                  onChange={(e) => setMetadata({ ...metadata, rend_esperado: e.target.value })}
+                  disabled={loading}
+                  placeholder="Ej: 8.5"
+                />
+                <small style={{ color: '#666' }}>Opcional: Rendimiento anual esperado</small>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Comentario</span>
+                <textarea
+                  value={metadata.comentario || ''}
+                  onChange={(e) => setMetadata({ ...metadata, comentario: e.target.value })}
+                  rows={3}
+                  disabled={loading}
+                  placeholder="Notas adicionales sobre esta cartera..."
+                />
+              </label>
+            </>
+          )}
+          {categoriaSeleccionada === 'largo_plazo' && (
+            <>
+              <div style={{ 
+                padding: 12, 
+                backgroundColor: '#eff6ff', 
+                borderLeft: '4px solid #2196F3',
+                borderRadius: 4 
+              }}>
+                <strong style={{ color: '#1565c0' }}>📈 Cartera Largo Plazo (USD)</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: '#0d47a1' }}>
+                  Inversiones a largo plazo sin fecha específica
+                </p>
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Comentario</span>
+                <textarea
+                  value={metadata.comentario || ''}
+                  onChange={(e) => setMetadata({ ...metadata, comentario: e.target.value })}
+                  rows={3}
+                  disabled={loading}
+                  placeholder="Describe el objetivo de esta cartera..."
+                />
+              </label>
+            </>
+          )}
+          {categoriaSeleccionada === 'viajes' && (
+            <>
+              <div style={{ 
+                padding: 12, 
+                backgroundColor: '#fff7ed', 
+                borderLeft: '4px solid #f97316',
+                borderRadius: 4 
+              }}>
+                <strong style={{ color: '#c2410c' }}>✈️ Cartera Viajes</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: '#7c2d12' }}>
+                  Define tu objetivo en USD y el tipo de cambio esperado
+                </p>
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>💵 Objetivo (USD) <span style={{ color: '#d32f2f' }}>*</span></span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={metadata.monto_objetivo_usd || ''}
+                  onChange={(e) => setMetadata({ ...metadata, monto_objetivo_usd: e.target.value })}
+                  required
+                  disabled={loading}
+                  placeholder="5000.00"
+                />
+                {errors.monto_objetivo_usd && <small style={{ color: '#d32f2f' }}>{errors.monto_objetivo_usd}</small>}
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>� Tipo de Cambio Esperado (USD → ARS)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={metadata.tipo_cambio || ''}
+                  onChange={(e) => setMetadata({ ...metadata, tipo_cambio: e.target.value })}
+                  disabled={loading}
+                  placeholder="1000.00"
+                />
+                <small style={{ color: '#666', fontSize: '0.75rem' }}>
+                  Opcional. Si lo definís, se calculará el equivalente en ARS
+                </small>
+              </label>
+              {metadata.monto_objetivo_usd && metadata.tipo_cambio && (
+                <div style={{ 
+                  padding: '0.75rem',
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  color: '#065f46'
+                }}>
+                  <strong>Equivalente:</strong> ARS ${(parseFloat(metadata.monto_objetivo_usd) * parseFloat(metadata.tipo_cambio)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
               )}
-            </button>
-            <button type="button" className="btn-close" onClick={onClose} disabled={submitting}>
-              <i className="fas fa-times"></i> Cancelar
-            </button>
-          </footer>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Comentario</span>
+                <textarea
+                  value={metadata.comentario || ''}
+                  onChange={(e) => setMetadata({ ...metadata, comentario: e.target.value })}
+                  rows={3}
+                  disabled={loading}
+                  placeholder="Ej: Europa 2026"
+                />
+              </label>
+            </>
+          )}
+          {categoriaSeleccionada === 'objetivo' && (
+            <>
+              <div style={{ 
+                padding: 12, 
+                backgroundColor: '#faf5ff', 
+                borderLeft: '4px solid #9C27B0',
+                borderRadius: 4 
+              }}>
+                <strong style={{ color: '#6a1b9a' }}>🎯 Cartera Objetivo</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: '#4a148c' }}>
+                  Define tu meta en USD, fecha objetivo y tipo de cambio esperado
+                </p>
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Fecha Objetivo <span style={{ color: '#d32f2f' }}>*</span></span>
+                <input
+                  type="date"
+                  value={metadata.fecha_objetivo || ''}
+                  onChange={(e) => setMetadata({ ...metadata, fecha_objetivo: e.target.value })}
+                  required
+                  disabled={loading}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                {errors.fecha_objetivo && <small style={{ color: '#d32f2f' }}>{errors.fecha_objetivo}</small>}
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>💵 Objetivo (USD) <span style={{ color: '#d32f2f' }}>*</span></span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={metadata.monto_objetivo_usd || ''}
+                  onChange={(e) => setMetadata({ ...metadata, monto_objetivo_usd: e.target.value })}
+                  required
+                  disabled={loading}
+                  placeholder="10000.00"
+                />
+                {errors.monto_objetivo_usd && <small style={{ color: '#d32f2f' }}>{errors.monto_objetivo_usd}</small>}
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>� Tipo de Cambio Esperado (USD → ARS)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={metadata.tipo_cambio || ''}
+                  onChange={(e) => setMetadata({ ...metadata, tipo_cambio: e.target.value })}
+                  disabled={loading}
+                  placeholder="1000.00"
+                />
+                <small style={{ color: '#666', fontSize: '0.75rem' }}>
+                  Opcional. Si lo definís, se calculará el equivalente en ARS
+                </small>
+              </label>
+              {metadata.monto_objetivo_usd && metadata.tipo_cambio && (
+                <div style={{ 
+                  padding: '0.75rem',
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  color: '#065f46'
+                }}>
+                  <strong>Equivalente:</strong> ARS ${(parseFloat(metadata.monto_objetivo_usd) * parseFloat(metadata.tipo_cambio)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              )}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span>Comentario</span>
+                <textarea
+                  value={metadata.comentario || ''}
+                  onChange={(e) => setMetadata({ ...metadata, comentario: e.target.value })}
+                  rows={3}
+                  disabled={loading}
+                  placeholder="Ej: Compra de auto 0km"
+                />
+              </label>
+            </>
+          )}
+          {/* Liquidez Inicial */}
+          {liquidezDisponible !== null && (
+            <div style={{ 
+              padding: 12, 
+              backgroundColor: '#f0fdf4', 
+              borderRadius: 4,
+              border: '1px solid #86efac'
+            }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontWeight: 500 }}>💰 Asignar Liquidez Inicial (opcional)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={liquidezInicial}
+                  onChange={(e) => setLiquidezInicial(e.target.value)}
+                  disabled={loading}
+                  placeholder="0.00"
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+                  <span style={{ color: '#15803d' }}>
+                    Disponible: ${liquidezDisponible.toFixed(2)} USD
+                  </span>
+                  {liquidezInicial > 0 && (
+                    <span style={{ color: '#6366f1' }}>
+                      Quedará: ${(liquidezDisponible - (parseFloat(liquidezInicial) || 0)).toFixed(2)} USD
+                    </span>
+                  )}
+                </div>
+                {errors.liquidez_inicial && <small style={{ color: '#d32f2f' }}>{errors.liquidez_inicial}</small>}
+              </label>
+              <small style={{ display: 'block', marginTop: 8, color: '#166534' }}>
+                💡 <strong>Tip:</strong> Podés asignar liquidez ahora o después desde la página de Liquidez
+              </small>
+            </div>
+          )}
         </form>
+        <footer className="modal-footer">
+          <button type="button" className="btn-close" onClick={onClose} disabled={loading}>
+            <i className="fas fa-times"></i> Cancelar
+          </button>
+          <button 
+            onClick={handleSubmit} 
+            className="btn-save" 
+            disabled={!canSubmit}
+          >
+            {loading ? (
+              <><i className="fas fa-spinner fa-spin"></i> Guardando...</>
+            ) : (
+              <><i className="fas fa-check"></i> Guardar</>
+            )}
+          </button>
+        </footer>
       </div>
     </div>
   );
-};
-
-export default AddPortfolioModal;
+}

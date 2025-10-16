@@ -1,15 +1,12 @@
 'use client';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FixedSizeList as List } from 'react-window';
-
 // Fila memoizada para minimizar renders
 const Row = memo(function Row({ index, style, data }) {
   const row = data.rows[index];
   const onDelete = data.onDelete;
-
   const tipo = (row?.tipo_mov || '').toString().toLowerCase();
   const tipoLabel = tipo === 'venta' ? 'Venta' : tipo === 'compra' ? 'Compra' : '';
-
   return (
     <div
       style={{
@@ -35,7 +32,6 @@ const Row = memo(function Row({ index, style, data }) {
     </div>
   );
 });
-
 function formatDate(s) {
   if (!s) return '';
   const d = new Date(s);
@@ -46,11 +42,9 @@ function formatDate(s) {
 function formatNumber(n) {
   return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
 }
-
 export default function LastMovementsTable({ rows, onReachEnd, onDelete, loading, error }) {
   const containerRef = useRef(null);
   const [height, setHeight] = useState(420);
-
   // Calcular alto disponible de forma simple (sin dependencias extra)
   const recomputeHeight = useCallback(() => {
     const vh = window.innerHeight || 800;
@@ -63,7 +57,6 @@ export default function LastMovementsTable({ rows, onReachEnd, onDelete, loading
     window.addEventListener('resize', recomputeHeight);
     return () => window.removeEventListener('resize', recomputeHeight);
   }, [recomputeHeight]);
-
   // Observa fin de lista para “cargar más”
   const endSentinelRef = useRef(null);
   useEffect(() => {
@@ -78,9 +71,7 @@ export default function LastMovementsTable({ rows, onReachEnd, onDelete, loading
     io.observe(sentinel);
     return () => io.disconnect();
   }, [onReachEnd]);
-
   const itemData = useMemo(() => ({ rows, onDelete }), [rows, onDelete]);
-
   return (
     <div className="table" style={{ width: '100%' }}>
       <div
@@ -102,7 +93,6 @@ export default function LastMovementsTable({ rows, onReachEnd, onDelete, loading
         <div style={{ textAlign: 'right' }}>Nominal</div>
         <div style={{ textAlign: 'right' }}>Acciones</div>
       </div>
-
       <div ref={containerRef} style={{ height, overflow: 'auto' }}>
         <List
           height={height}
@@ -114,10 +104,8 @@ export default function LastMovementsTable({ rows, onReachEnd, onDelete, loading
         >
           {Row}
         </List>
-
         {/* Sentinela para infinite scroll */}
         <div ref={endSentinelRef} style={{ height: 1 }} />
-
         {loading && (
           <div style={{ padding: 10, textAlign: 'center', color: '#64748b' }}>
             Cargando…

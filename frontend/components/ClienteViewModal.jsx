@@ -1,12 +1,9 @@
 import styles from "../styles/clientes.module.css";
-
 export default function ClienteViewModal({ open, onClose, cliente, fmtARS, formatEsDate }) {
   if (!open || !cliente) return null;
-
   const feeText = typeof cliente.fee === "number" ? `${cliente.fee}%` : (cliente.fee || "");
   const banks = Array.isArray(cliente.banks) ? cliente.banks : [];
   const fechaAlta = formatEsDate ? formatEsDate(cliente.joinedAt) : "";
-
   return (
     <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="view-cliente-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
       <div className={styles.modalContent} onMouseDown={(e) => e.stopPropagation()}>
@@ -14,17 +11,13 @@ export default function ClienteViewModal({ open, onClose, cliente, fmtARS, forma
           <i className="fa-regular fa-id-badge" style={{ marginRight: 8 }} />
           {cliente.name}
         </h3>
-
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <InfoRow icon="fa-solid fa-phone" label="Teléfono" value={cliente.phone} />
           <InfoRow icon="fa-regular fa-calendar" label="Fecha de alta" value={fechaAlta} />
-
           <InfoRow icon="fa-solid fa-gauge-high" label="Perfil de riesgo" value={cliente.riskProfile} />
           <InfoRow icon="fa-regular fa-calendar" label="Período" value={cliente.period} />
-
           <InfoRow icon="fa-solid fa-percent" label="Arancel" value={feeText} />
           <InfoRow icon="fa-solid fa-briefcase" label="Tipo de servicio" value={cliente.serviceType} />
-
           <div className={styles.span2}>
             <label style={{ fontWeight: 600, color: "#1f2937" }}><i className="fa-solid fa-building-columns" style={{ marginRight: 8 }} />Bancos</label>
             {banks.length === 0 ? (
@@ -40,7 +33,6 @@ export default function ClienteViewModal({ open, onClose, cliente, fmtARS, forma
               </div>
             )}
           </div>
-
           {cliente.comments && (
             <div className={styles.span2}>
               <label style={{ fontWeight: 600, color: "#1f2937" }}><i className="fa-regular fa-comments" style={{ marginRight: 8 }} />Comentarios</label>
@@ -48,7 +40,6 @@ export default function ClienteViewModal({ open, onClose, cliente, fmtARS, forma
             </div>
           )}
         </div>
-
         <div className={styles.modalFooter} style={{ marginTop: 14 }}>
           <button className="btn-close" onClick={onClose}><i className="fa-solid fa-xmark" /> Cerrar</button>
         </div>
@@ -56,7 +47,6 @@ export default function ClienteViewModal({ open, onClose, cliente, fmtARS, forma
     </div>
   );
 }
-
 function InfoRow({ icon, label, value }) {
   return (
     <div className={styles.formGroup}>

@@ -1,10 +1,8 @@
 // components/home/TaskListCard.jsx
 'use client';
-
 function TaskItem({ task, onToggleComplete, onEdit, onDelete }) {
   const prClass =
     task.priority === 'alta' ? 'pr-alta' : task.priority === 'media' ? 'pr-media' : 'pr-baja';
-
   return (
     <div className={`task-item ${prClass} ${task.completed ? 'completed' : ''}`}>
       <div className="task-info">
@@ -12,7 +10,6 @@ function TaskItem({ task, onToggleComplete, onEdit, onDelete }) {
         <div className="task-desc">{task.description || ''}</div>
         <div className="task-meta">{task.date}</div>
       </div>
-
       <div className="task-actions">
         <button
           className="action-btn"
@@ -31,7 +28,6 @@ function TaskItem({ task, onToggleComplete, onEdit, onDelete }) {
     </div>
   );
 }
-
 export default function TaskListCard({ title, tasks, onToggleComplete, onEdit, onDelete }) {
   return (
     <div className="card tasks-card">

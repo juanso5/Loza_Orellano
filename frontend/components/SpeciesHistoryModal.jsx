@@ -1,13 +1,11 @@
 // components/SpeciesHistoryModal.jsx
 import React from 'react';
-
 const SpeciesHistoryModal = ({ clients, context, onClose }) => {
   const client = clients.find((c) => c.id === context.clientId);
   const portfolio = client?.portfolios.find((p) => p.id === context.portfolioId);
   const rows = client?.movements
     .filter((m) => m.portfolio === portfolio?.name && m.fund.toLowerCase() === context.fundName.toLowerCase())
     .sort((a, b) => new Date(b.date) - new Date(a.date)) || [];
-
   const fmtDate = (s) => {
     if (!s) return '';
     const d = new Date(s);
@@ -15,7 +13,6 @@ const SpeciesHistoryModal = ({ clients, context, onClose }) => {
     return d.toLocaleDateString('es-AR', { year: 'numeric', month: 'short', day: 'numeric' });
   };
   const formatNumber = (n) => Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
-
   return (
     <div className="modal" style={{ display: 'flex' }} aria-hidden="false">
       <div className="modal-dialog">
@@ -53,5 +50,4 @@ const SpeciesHistoryModal = ({ clients, context, onClose }) => {
     </div>
   );
 };
-
 export default SpeciesHistoryModal;

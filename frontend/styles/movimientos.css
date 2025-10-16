@@ -27,10 +27,23 @@ body .sidebar {
 /* --- Base layout --- */
 :root { --primary: #2563eb; --panel: #ecf0f1; --muted:#6b7280; --bg:#f4f6f9; --card:#fff; }
 *{box-sizing:border-box}
-body { font-family: 'Roboto', sans-serif; margin:0; background:var(--bg); color:#0f172a; }
+html, body { 
+  font-family: 'Roboto', sans-serif; 
+  margin:0; 
+  padding: 0;
+  background:var(--bg); 
+  color:#0f172a; 
+  overflow-x: hidden;
+  height: 100%;
+}
 
 /* main */
-.main-content { margin-left:220px; transition: margin-left 0.3s; padding:20px; }
+.main-content { 
+  margin-left:220px; 
+  transition: margin-left 0.3s; 
+  padding:20px;
+  min-height: 100vh;
+}
 .main-content.expanded { margin-left:60px; }
 
 /* header */
@@ -59,6 +72,24 @@ body { font-family: 'Roboto', sans-serif; margin:0; background:var(--bg); color:
 
 /* content area */
 .content-area { margin-top:6px; }
+
+/* fondos layout - sin overflow adicional */
+.fondos-layout { 
+  overflow: visible; 
+}
+
+/* clients column - específico para movimientos */
+.clients-column {
+  height: fit-content;
+  max-height: none;
+}
+
+/* sobrescribir el max-height del fondos.css para la lista de clientes */
+#clients-list,
+.clients-list {
+  max-height: calc(100vh - 200px) !important;
+  overflow-y: auto;
+}
 
 /* clients accordion */
 .clients-container { display:flex; flex-direction:column; gap:12px; margin-bottom:18px; }
@@ -106,6 +137,167 @@ body { font-family: 'Roboto', sans-serif; margin:0; background:var(--bg); color:
 .modal-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
 .modal-body { padding:6px 0 12px 0; }
 .modal-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+
+/* Modal overlay (para MovementModal) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+
+.modal-overlay .modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-overlay .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.modal-overlay .modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.modal-overlay .modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modal-overlay .modal-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.modal-overlay .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.modal-overlay .btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.modal-overlay .btn.secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.modal-overlay .btn.secondary:hover {
+  background: #f9fafb;
+}
+
+.modal-overlay .btn.primary {
+  background: #2563eb;
+  color: white;
+}
+
+.modal-overlay .btn.primary:hover {
+  background: #1d4ed8;
+}
+
+.modal-overlay .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Estilos para formulario dentro del modal */
+.modal-overlay form {
+  padding: 24px;
+}
+
+.modal-overlay label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.modal-overlay label span {
+  font-weight: 500;
+  color: #374151;
+}
+
+.modal-overlay input,
+.modal-overlay select {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.modal-overlay input:focus,
+.modal-overlay select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.modal-overlay input:disabled,
+.modal-overlay select:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.modal-overlay small {
+  font-size: 12px;
+  margin-top: 4px;
+}
 
 /* errors */
 .error-message { color:#dc3545; font-size:.86rem; margin-top:6px; min-height:1em; }

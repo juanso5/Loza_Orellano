@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-
 const PortfolioDetailModal = ({
   clients,
   context,         // { clientId, portfolioId }
@@ -16,31 +15,26 @@ const PortfolioDetailModal = ({
     () => client?.portfolios?.find((p) => p.id === context?.portfolioId),
     [client, context]
   );
-
   const [fundFilter, setFundFilter] = useState("");
   const [editedFunds, setEditedFunds] = useState(() =>
     (portfolio?.funds || []).map((f) => ({ ...f }))
   );
-
   const filteredFunds = useMemo(() => {
     const q = (fundFilter || "").trim().toLowerCase();
     const list = editedFunds;
     if (!q) return list;
     return list.filter((f) => String(f.name || "").toLowerCase().includes(q));
   }, [editedFunds, fundFilter]);
-
   const total = useMemo(
     () => (editedFunds || []).reduce((s, f) => s + (Number(f.nominal) || 0), 0),
     [editedFunds]
   );
-
   const hasInvalid =
     !client ||
     !portfolio ||
     editedFunds.some(
       (f) => !Number.isFinite(Number(f.nominal)) || Number(f.nominal) < 0
     );
-
   const handleSave = async () => {
     if (hasInvalid) return;
     // Actualmente no persistimos nominal editado desde acá (se ajusta por movimientos).
@@ -50,16 +44,13 @@ const PortfolioDetailModal = ({
       periodMonths: portfolio?.periodMonths ?? null,
     });
   };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!hasInvalid) handleSave();
   };
-
   const handleOverlayMouseDown = (e) => {
     if (e.target === e.currentTarget) onClose?.();
   };
-
   return (
     <div
       className="modal"
@@ -87,7 +78,6 @@ const PortfolioDetailModal = ({
               </button>
             </div>
           </header>
-
           <div className="modal-body">
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
               <div>
@@ -103,7 +93,6 @@ const PortfolioDetailModal = ({
                 Total nominal: {total.toLocaleString('es-AR', { maximumFractionDigits: 2 })} unidades
               </div>
             </div>
-
             <div style={{ marginTop: '12px' }}>
               <table className="movements-table" style={{ width: '100%' }}>
                 <thead>
@@ -150,7 +139,6 @@ const PortfolioDetailModal = ({
               </table>
             </div>
           </div>
-
           <footer className="modal-footer">
             <button type="submit" className="btn-save" disabled={hasInvalid} aria-disabled={hasInvalid}>
               <i className="fas fa-check"></i> Guardar
@@ -167,5 +155,4 @@ const PortfolioDetailModal = ({
     </div>
   );
 };
-
 export default PortfolioDetailModal;

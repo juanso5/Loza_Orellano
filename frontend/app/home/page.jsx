@@ -1,28 +1,24 @@
 // app/home/page.jsx
 'use client';
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-
 import Sidebar from "../../components/Sidebar";
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal";
 import TaskModal from "../../components/TaskModal";
 import TaskListCard from "../../components/TaskListCard";
-
+import { useLocalStorageState } from "@/lib/hooks";
 const PRIORITY_CONFIG = {
   alta: { color: '#e74c3c', className: 'prioridad-alta' },
   media: { color: '#f39c12', className: 'prioridad-media' },
   baja: { color: '#27ae60', className: 'prioridad-baja' },
 };
-
 // id temporal para UI
 function generateTempId() {
   return 't-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 10000);
 }
-
 // Id válido de BD: numérico y no comienza con 't-'
 function isDbId(id) {
   if (id === null || id === undefined) return false;
@@ -30,46 +26,29 @@ function isDbId(id) {
   if (s.startsWith('t-')) return false;
   return /^\d+$/.test(s);
 }
-
 export default function HomePage() {
   // STATE
   const [tasks, setTasks] = useState([]); // { id(num|temp), title, description, date(YYYY-MM-DD), priority, completed, eventId }
   const [editingTask, setEditingTask] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [toDeleteId, setToDeleteId] = useState(null);
-
   const calendarRef = useRef(null);
   const suppressEventAddRef = useRef(false);
   const loadedFromDbRef = useRef(false);
-
   // Sidebar collapsed con persistencia
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebarCollapsed');
-    if (saved !== null) setCollapsed(JSON.parse(saved));
-  }, []);
-  const toggleSidebar = () => {
-    setCollapsed((prev) => {
-      localStorage.setItem('sidebarCollapsed', JSON.stringify(!prev));
-      return !prev;
-    });
-  };
-
+  const [collapsed, setCollapsed] = useLocalStorageState('sidebarCollapsed', false);
   // Calendar API
   const calendarApi = () => calendarRef.current?.getApi?.();
-
   // Cargar tareas desde BD y pintarlas en el calendario (reemplaza el seed local)
   useEffect(() => {
     const api = calendarApi();
     if (!api || loadedFromDbRef.current) return;
-
     (async () => {
       try {
         const res = await fetch('/api/home', { method: 'GET' });
         const payload = await res.json().catch(() => null);
         if (!res.ok) throw new Error(payload?.error || 'Error al cargar tareas');
         const list = Array.isArray(payload.data) ? payload.data : [];
-
         const mapped = list.map((t) => {
           suppressEventAddRef.current = true;
           const ev = api.addEvent({
@@ -88,15 +67,12 @@ export default function HomePage() {
           suppressEventAddRef.current = false;
           return { ...t, eventId: ev?.id || ('ev-' + t.id) };
         });
-
         setTasks(mapped);
         loadedFromDbRef.current = true;
       } catch (e) {
-        console.error(e);
-      }
+        }
     })();
   }, [calendarRef.current]);
-
   // Derivados
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const { todayTasks, pendingTasks } = useMemo(() => {
@@ -112,7 +88,6 @@ export default function HomePage() {
       pendingTasks: sorted.filter((t) => !(t.date === todayStr && !t.completed)),
     };
   }, [tasks, todayStr]);
-
   // Handlers
   const openNew = () => {
     setEditingTask({
@@ -127,7 +102,6 @@ export default function HomePage() {
   };
   const openEdit = (task) => { setEditingTask(task); setModalOpen(true); };
   const closeModal = () => setModalOpen(false);
-
   // Crear/Editar contra /api/home
   const upsertTask = async ({ id, title, description, date, priority }) => {
     const api = calendarApi();
@@ -142,13 +116,11 @@ export default function HomePage() {
         const payload = await res.json().catch(() => null);
         if (!res.ok) throw new Error(payload?.error || 'Error al crear la tarea');
         const data = payload.data;
-
         // si venía de temporal, remover evento temporal
         if (id) {
           const temp = tasks.find((t) => String(t.id) === String(id));
           if (temp?.eventId) api?.getEventById(String(temp.eventId))?.remove();
         }
-
         // Crear evento definitivo
         const ev = api?.addEvent({
           id: 'ev-' + data.id,
@@ -163,7 +135,6 @@ export default function HomePage() {
           ],
           extendedProps: { description: data.description || '' },
         });
-
         // Reemplazar temporal o agregar nuevo
         setTasks((prev) => {
           if (id) {
@@ -185,7 +156,6 @@ export default function HomePage() {
         const payload = await res.json().catch(() => null);
         if (!res.ok) throw new Error(payload?.error || 'Error al editar la tarea');
         const data = payload.data;
-
         setTasks((prev) =>
           prev.map((t) => {
             if (String(t.id) !== String(id)) return t;
@@ -206,17 +176,14 @@ export default function HomePage() {
       }
       setModalOpen(false);
     } catch (e) {
-      console.error(e);
       alert(e.message || 'Error al guardar la tarea');
     }
   };
-
   const toggleComplete = async (taskId) => {
     const api = calendarApi();
     const task = tasks.find((t) => String(t.id) === String(taskId));
     if (!task) return;
     const nextCompleted = !task.completed;
-
     try {
       if (isDbId(taskId)) {
         const res = await fetch('/api/home', {
@@ -240,11 +207,9 @@ export default function HomePage() {
         })
       );
     } catch (e) {
-      console.error(e);
       alert(e.message || 'No se pudo actualizar la tarea');
     }
   };
-
   const requestDelete = (taskId) => setToDeleteId(taskId);
   const confirmDelete = async () => {
     if (!toDeleteId) return;
@@ -265,13 +230,11 @@ export default function HomePage() {
         return prev.filter((x) => String(x.id) !== String(toDeleteId));
       });
     } catch (e) {
-      console.error(e);
       alert(e.message || 'No se pudo borrar la tarea');
     } finally {
       setToDeleteId(null);
     }
   };
-
   // FullCalendar callbacks
   const onSelect = (info) => {
     setEditingTask({
@@ -292,11 +255,9 @@ export default function HomePage() {
   const onEventDropOrResize = (eventChangeInfo) => {
     const ev = eventChangeInfo.event;
     const newDate = ev.startStr ? ev.startStr.split('T')[0] : null;
-
     setTasks((prev) =>
       prev.map((t) => (String(t.eventId) === String(ev.id) && newDate ? { ...t, date: newDate } : t))
     );
-
     const t = tasks.find((x) => String(x.eventId) === String(ev.id));
     if (t && isDbId(t.id) && newDate) {
       fetch('/api/home', {
@@ -314,7 +275,6 @@ export default function HomePage() {
   const onEventRemove = (removeInfo) => {
     setTasks((prev) => prev.filter((t) => String(t.eventId) !== String(removeInfo.event.id)));
   };
-
   // Carrusel
   const tasksRowRef = useRef(null);
   const [showCarouselBtns, setShowCarouselBtns] = useState(false);
@@ -342,17 +302,14 @@ export default function HomePage() {
       mo.disconnect();
     };
   }, [todayTasks.length, pendingTasks.length]);
-
   const scrollAmount = () => Math.round((tasksRowRef.current?.clientWidth || 0) * 0.8);
   const scrollPrev = () => tasksRowRef.current?.scrollBy({ left: -scrollAmount(), behavior: 'smooth' });
   const scrollNext = () => tasksRowRef.current?.scrollBy({ left: scrollAmount(), behavior: 'smooth' });
-
   return (
     <>
       <div id="sidebar-container">
-        <Sidebar collapsed={collapsed} toggleSidebar={toggleSidebar} />
+        <Sidebar collapsed={collapsed} toggleSidebar={() => setCollapsed(c => !c)} />
       </div>
-
       <div className={`main-content ${collapsed ? 'expanded' : ''}`} id="main-content">
         <div className="main-inner">
           <div className="top-row">
@@ -363,7 +320,6 @@ export default function HomePage() {
               </button>
             </div>
           </div>
-
           {/* TASKS ROW */}
           <div className="tasks-row" ref={tasksRowRef}>
             <TaskListCard
@@ -380,7 +336,6 @@ export default function HomePage() {
               onEdit={openEdit}
               onDelete={setToDeleteId}
             />
-
             {showCarouselBtns && (
               <>
                 <button className={`carousel-btn left ${!canPrev ? 'hidden' : ''}`} aria-label="Anterior tareas" onClick={scrollPrev}>
@@ -392,7 +347,6 @@ export default function HomePage() {
               </>
             )}
           </div>
-
           {/* CALENDAR */}
           <div className="card calendar-card">
             <div className="calendar-wrapper">
@@ -421,7 +375,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
       {/* Modales */}
       {modalOpen && (
         <TaskModal
@@ -430,7 +383,6 @@ export default function HomePage() {
           onSave={upsertTask}
         />
       )}
-
       {toDeleteId && (
         <ConfirmDeleteModal
           open={!!toDeleteId}

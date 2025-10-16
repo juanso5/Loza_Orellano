@@ -70,7 +70,14 @@ body {
 .big-number { font-size:1.5rem; font-weight:700; color:#0f1720; }
 
 /* Carteras grid */
-.carteras-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:14px; padding:16px 18px; }
+.carteras-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(320px,1fr)); gap:18px; padding:16px 18px; }
+
+/* Cartera card base overflow protection */
+.carteras-grid > * {
+  overflow: hidden;
+  word-wrap: break-word;
+  word-break: break-word;
+}
 
 /* Cartera card */
 .cartera-card { background:var(--card); border-radius:12px; padding:14px; box-shadow:var(--shadow); min-height:110px; display:flex; flex-direction:column; gap:8px; transition: transform .12s ease, box-shadow .12s ease; cursor:pointer; }
@@ -138,5 +145,5 @@ body {
   .clients-column { order: 2; }
   .client-detail { order: 1; }
   .clients-list { max-height:220px; }
-  .carteras-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .carteras-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 }

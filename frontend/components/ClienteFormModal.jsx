@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import styles from "../styles/clientes.module.css";
-
 export default function ClienteFormModal({ open, onClose, onSave, initial, helpers }) {
   const { isValidCuit, formatCuit } = helpers || {};
   const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState({});
-
   // Opciones dinámicas para "Perfil de riesgo"
   const DEFAULT_RISK_OPTIONS = useMemo(() => ["Bajo", "Moderado", "Alto"], []);
   const [riskOptions, setRiskOptions] = useState(DEFAULT_RISK_OPTIONS);
   const [customRisk, setCustomRisk] = useState("");
-
   // Período (con opción de agregar)
   const DEFAULT_PERIOD_OPTIONS = useMemo(
     () => ["Mensual", "Bimensual", "Trimestral", "6 meses", "Anual"],
@@ -18,16 +15,13 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
   );
   const [periodOptions, setPeriodOptions] = useState(DEFAULT_PERIOD_OPTIONS);
   const [customPeriod, setCustomPeriod] = useState("");
-
   // Inputs para agregar múltiples bancos (nombre + alias en la misma fila)
   const [newBankName, setNewBankName] = useState("");
   const [newBankAlias, setNewBankAlias] = useState("");
-
   // Edición inline de bancos
   const [editingIdx, setEditingIdx] = useState(null);
   const [editBankName, setEditBankName] = useState("");
   const [editBankAlias, setEditBankAlias] = useState("");
-
   // Inicializar valores y mapear banco único -> lista de bancos
   useEffect(() => {
     const base = { ...(initial || {}) };
@@ -42,6 +36,14 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
     // Compat: reflejar primer banco en bank/bankAlias
     base.bank = banks[0]?.name || "";
     base.bankAlias = banks[0]?.alias || "";
+    // Mapear joinedAt -> joinedLocal para el input date
+    if (base.joinedAt) {
+      // Si es ISO completo, tomar solo la parte de fecha
+      base.joinedLocal = base.joinedAt.split('T')[0];
+    } else {
+      // Si no hay fecha, usar la fecha actual
+      base.joinedLocal = new Date().toISOString().split('T')[0];
+    }
     setValues(base);
     setErrors({});
     // reset edición
@@ -51,7 +53,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
     setNewBankName("");
     setNewBankAlias("");
   }, [initial, open]);
-
   // Incluir perfil inicial si es personalizado
   useEffect(() => {
     const rp = initial?.riskProfile;
@@ -59,7 +60,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       setRiskOptions((prev) => (prev.includes(rp) ? prev : [...prev, rp]));
     }
   }, [initial, DEFAULT_RISK_OPTIONS]);
-
   // Incluir período inicial si es personalizado
   useEffect(() => {
     const p = initial?.period;
@@ -67,24 +67,17 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       setPeriodOptions((prev) => (prev.includes(p) ? prev : [...prev, p]));
     }
   }, [initial, DEFAULT_PERIOD_OPTIONS]);
-
   useEffect(() => {
     const onEsc = (e) => { if (e.key === "Escape" && open) onClose?.(); };
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
-
   if (!open) return null;
-
   const isIntegral = values.serviceType === "Integral";
-
   function handleSubmit(e) {
     e.preventDefault();
     const nextErrors = {};
-
     if (!values.name?.trim()) nextErrors.name = "El nombre es obligatorio.";
-
-
     // No dejar “modo agregar” sin confirmar
     if (values.riskProfile === "__custom__") {
       nextErrors.riskProfile = "Confirmá la nueva opción de riesgo o seleccioná una existente.";
@@ -92,19 +85,15 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
     if (values.period === "__period_custom__") {
       nextErrors.period = "Confirmá el nuevo período o seleccioná uno existente.";
     }
-
     // Arancel (%)
     if (values.fee !== "" && values.fee !== undefined) {
       const f = Number(String(values.fee).replace(",", "."));
       if (Number.isNaN(f) || f < 0 || f > 100) nextErrors.fee = "Arancel inválido (0 a 100%).";
     }
-
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-
     onSave?.(values);
   }
-
   // Perfil de riesgo
   const onRiskChange = (e) => {
     const val = e.target.value;
@@ -115,7 +104,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       setValues((v) => ({ ...v, riskProfile: val }));
     }
   };
-
   const addCustomRisk = () => {
     const label = (customRisk || "").trim();
     if (!label) return;
@@ -127,7 +115,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       return rest;
     });
   };
-
   // Período
   const onPeriodChange = (e) => {
     const val = e.target.value;
@@ -138,7 +125,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       setValues((v) => ({ ...v, period: val }));
     }
   };
-
   const addCustomPeriod = () => {
     const label = (customPeriod || "").trim();
     if (!label) return;
@@ -150,7 +136,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       return rest;
     });
   };
-
   // Bancos (múltiples)
   const addBank = () => {
     const name = newBankName.trim();
@@ -170,7 +155,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
     setNewBankName("");
     setNewBankAlias("");
   };
-
   const removeBank = (idx) => {
     setValues((v) => {
       const banks = (v.banks || []).filter((_, i) => i !== idx);
@@ -183,7 +167,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       setEditBankAlias("");
     }
   };
-
   const updateBank = (idx, patch) => {
     setValues((v) => {
       const banks = (v.banks || []).map((b, i) => (i === idx ? { ...b, ...patch } : b));
@@ -191,14 +174,12 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
       return { ...v, banks, bank: first?.name || "", bankAlias: first?.alias || "" };
     });
   };
-
   const addBankOnEnter = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       addBank();
     }
   };
-
   const startEditBank = (idx) => {
     const b = values.banks?.[idx];
     if (!b) return;
@@ -206,7 +187,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
     setEditBankName(b.name || "");
     setEditBankAlias(b.alias || "");
   };
-
   const saveEditBank = () => {
     const name = (editBankName || "").trim();
     if (!name) return;
@@ -215,13 +195,11 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
     setEditBankName("");
     setEditBankAlias("");
   };
-
   const cancelEditBank = () => {
     setEditingIdx(null);
     setEditBankName("");
     setEditBankAlias("");
   };
-
   return (
     <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="cliente-modal-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
       <div className={styles.modalDialog} onMouseDown={(e) => e.stopPropagation()}>
@@ -231,7 +209,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
             <i className="fa-solid fa-xmark"></i>
           </button>
         </header>
-
         <div className={styles.modalBody}>
           <form onSubmit={handleSubmit} className={styles.formGrid} autoComplete="off" noValidate>
             {/* Nombre */}
@@ -249,7 +226,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               </div>
               {errors.name && <span className={styles.error}>{errors.name}</span>}
             </div>
-
             {/* Teléfono */}
             <div className={styles.formGroup}>
               <label>Teléfono</label>
@@ -263,7 +239,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
                 />
               </div>
             </div>
-
             {/* Fecha de alta */}
             <div className={styles.formGroup}>
               <label>Fecha de alta</label>
@@ -276,7 +251,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
                 />
               </div>
             </div>
-
             {/* Perfil de riesgo */}
             <div className={styles.formGroup}>
               <label>Perfil de riesgo</label>
@@ -309,7 +283,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               )}
               {errors.riskProfile && <span className={styles.error}>{errors.riskProfile}</span>}
             </div>
-
             {/* Período */}
             <div className={styles.formGroup}>
               <label>Período</label>
@@ -342,7 +315,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               )}
               {errors.period && <span className={styles.error}>{errors.period}</span>}
             </div>
-
             {/* Arancel (%) */}
             <div className={styles.formGroup}>
               <label>Arancel (%)</label>
@@ -361,7 +333,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
               <small className={styles.hint}>Porcentaje a cobrar al cliente (0–100%)</small>
               {errors.fee && <span className={styles.error}>{errors.fee}</span>}
             </div>
-
             {/* Tipo de servicio (arriba de Bancos) */}
             <div className={styles.formGroup}>
               <label>Tipo de servicio</label>
@@ -376,11 +347,9 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
                 </select>
               </div>
             </div>
-
             {/* Bancos (múltiples) + Alias por banco (fila de alta + lista editable) */}
             <div className={styles.formGroup}>
               <label>Bancos</label>
-
               {/* Alta: Nombre + Alias + botón "+" en una sola fila */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center" }}>
                 <div className={styles.inputWithIcon}>
@@ -414,7 +383,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
                   <i className="fa-solid fa-plus"></i>
                 </button>
               </div>
-
               {/* Lista en tarjetas compactas */}
               {(values.banks && values.banks.length > 0) && (
                 <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -469,7 +437,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
                             </div>
                           )}
                         </div>
-
                         <div style={{ display: "flex", gap: 8 }}>
                           {!isEditing ? (
                             <>
@@ -525,7 +492,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
                 </div>
               )}
             </div>
-
             {/* Comentarios */}
             <div className={`${styles.formGroup} ${styles.span2}`}>
               <label>Comentarios</label>
@@ -535,7 +501,6 @@ export default function ClienteFormModal({ open, onClose, onSave, initial, helpe
                 placeholder=""
               />
             </div>
-
             <div className={`${styles.modalFooter} ${styles.span2}`}>
               <button type="submit" className="btn-save"><i className="fas fa-check"></i> Guardar</button>
               <button type="button" className="btn-close" onClick={onClose}><i className="fas fa-times"></i> Cancelar</button>

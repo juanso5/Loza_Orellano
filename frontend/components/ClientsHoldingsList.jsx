@@ -2,20 +2,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMovements } from './MovementsProvider';
 import ClientHoldingsCard from './ClientHoldingsCard';
-
+import { fetchClients, filterClientsByQuery } from '@/lib/clientHelpers';
 export default function ClientsHoldingsList({ onAdd }) {
   const { query } = useMovements();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     let ignore = false;
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/cliente', { cache: 'no-store' });
-        const j = await res.json();
-        const list = Array.isArray(j?.data) ? j.data : [];
+        const list = await fetchClients();
         const norm = list.map((c) => ({
           id: Number(c.id ?? c.id_cliente ?? 0),
           name: c.name || c.nombre || '',
@@ -29,16 +26,11 @@ export default function ClientsHoldingsList({ onAdd }) {
     })();
     return () => { ignore = true; };
   }, []);
-
   const filtered = useMemo(() => {
-    const q = (query || '').trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter(c => c.name.toLowerCase().includes(q));
+    return filterClientsByQuery(clients, query);
   }, [clients, query]);
-
   if (loading) return <div className="muted" style={{ padding: 8 }}>Cargando clientes…</div>;
   if (filtered.length === 0) return <div className="muted" style={{ padding: 8 }}>Sin clientes</div>;
-
   return (
     <section aria-label="Patrimonio por cliente" style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
       {filtered.map(c => (

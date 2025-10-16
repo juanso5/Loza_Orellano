@@ -1,16 +1,12 @@
 'use client';
-
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../../lib/supabaseClient';
-
 export const dynamic = 'force-dynamic';
-
 function MfaSetupInner() {
   const router = useRouter();
   const search = useSearchParams();
   const returnUrl = search?.get('returnUrl') || '/home';
-
   const [loading, setLoading] = useState(true);
   const [enrollError, setEnrollError] = useState('');
   const [verifyError, setVerifyError] = useState('');
@@ -18,24 +14,20 @@ function MfaSetupInner() {
   const [qrSrc, setQrSrc] = useState('');
   const [factorId, setFactorId] = useState('');
   const [code, setCode] = useState('');
-
   useEffect(() => {
     const run = async () => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) return;
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.replace('/login?reason=need-auth');
         return;
       }
-
       const emailConfirmed = user.email_confirmed_at || user.confirmed_at;
       if (!emailConfirmed) {
         router.replace(`/verify-email?returnUrl=${encodeURIComponent(returnUrl)}`);
         return;
       }
-
       const { data: factorsData, error: lfErr } = await supabase.auth.mfa.listFactors();
       if (lfErr) {
         setEnrollError(lfErr.message);
@@ -47,14 +39,12 @@ function MfaSetupInner() {
         router.replace(`/mfa/verify?returnUrl=${encodeURIComponent(returnUrl)}`);
         return;
       }
-
       const unverified = (factorsData?.totp || []).filter((f) => f.status === 'unverified');
       if (unverified.length > 1) {
         await Promise.all(
           unverified.slice(0, -1).map((f) => supabase.auth.mfa.unenroll({ factorId: f.id }).catch(() => {}))
         );
       }
-
       let enrollFactor = null;
       {
         const { data: f2 } = await supabase.auth.mfa.listFactors();
@@ -72,14 +62,12 @@ function MfaSetupInner() {
         }
         enrollFactor = data;
       }
-
       setFactorId(enrollFactor.id);
       setTotpUri(enrollFactor.totp.uri);
       setLoading(false);
     };
     run();
   }, [router, returnUrl]);
-
   // Generar QR local (dinámico; no import estático)
   useEffect(() => {
     if (!totpUri) return;
@@ -95,19 +83,15 @@ function MfaSetupInner() {
     })();
     return () => { mounted = false; };
   }, [totpUri]);
-
   const handleVerify = async (e) => {
     e.preventDefault();
     setVerifyError('');
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
-
     const { data: factors } = await supabase.auth.mfa.listFactors();
     const current = (factors?.totp || []).find((f) => f.status === 'unverified') || null;
     const useFactorId = current?.id || factorId;
-
     const digits = code.replace(/\D/g, '');
-
     let { error } = await supabase.auth.mfa.verify({ factorId: useFactorId, code: digits });
     if (error) {
       const { data: chal } = await supabase.auth.mfa.challenge({ factorId: useFactorId });
@@ -126,7 +110,6 @@ function MfaSetupInner() {
     }
     router.replace(`/mfa/verify?returnUrl=${encodeURIComponent(returnUrl)}`);
   };
-
   const handleCancel = async () => {
     const supabase = getSupabaseBrowserClient();
     try {
@@ -137,9 +120,7 @@ function MfaSetupInner() {
     await supabase.auth.signOut();
     router.replace('/login?canceledMfa=1');
   };
-
   if (loading) return <div style={{ padding: 24 }}>Configurando TOTP...</div>;
-
   return (
     <div style={{ maxWidth: 420, margin: '40px auto', padding: 16 }}>
       <h1>Configurar MFA (TOTP)</h1>
@@ -175,7 +156,6 @@ function MfaSetupInner() {
     </div>
   );
 }
-
 export default function Page() {
   return (
     <Suspense fallback={<div style={{ padding: 24 }}>Cargando...</div>}>
