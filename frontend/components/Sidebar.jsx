@@ -64,6 +64,9 @@ export default function Sidebar({ collapsed: collapsedProp, toggleSidebar: toggl
         <li className={isActive('/rendimientos') ? 'active' : ''}>
           <Link href="/rendimientos"><i className="fas fa-chart-line" /> <span className="menu-text">Rendimientos</span></Link>
         </li>
+        <li className={isActive('/importar-cartera') ? 'active' : ''}>
+          <Link href="/importar-cartera"><i className="fas fa-file-import" /> <span className="menu-text">Importar Cartera</span></Link>
+        </li>
         <li>
           <button
             onClick={async () => { const sb = getSupabaseBrowserClient(); if (sb) { await sb.auth.signOut(); } router.replace('/login'); }}
